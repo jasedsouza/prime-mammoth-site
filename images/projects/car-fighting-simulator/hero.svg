@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<defs><pattern id="lines" width="38" height="38" patternUnits="userSpaceOnUse" patternTransform="rotate(25)"><path d="M0 0V38" stroke="#F2EBDD" stroke-width="1" opacity=".12"/></pattern></defs>
+<rect width="1600" height="900" fill="#DF4C2F"/><rect width="1600" height="900" fill="url(#lines)"/>
+<path d="M1100 0 770 900H1230L1560 0Z" fill="#171713"/>
+<path d="m1140 210-65 160 110-20-175 220 55-164-103 17Z" fill="#F2EBDD"/>
+<g font-family="Arial,Helvetica,sans-serif" fill="#171713" font-weight="900" font-size="161" letter-spacing="-9"><text x="64" y="270">CAR</text><text x="64" y="424">FIGHTING</text><text x="64" y="568" font-size="125" letter-spacing="-6">SIMULATOR</text></g>
+<g font-family="Arial,sans-serif" font-size="21" letter-spacing="3" fill="#171713"><text x="68" y="66">01 / PRIME MAMMOTH</text><text x="68" y="797">ARTWORK PLACEHOLDER</text><text x="68" y="836">1600 × 900 HERO</text><text x="1515" y="836" transform="rotate(-90 1515 836)" fill="#F2EBDD">DRIVE. FIGHT. WRECK EVERYTHING.</text></g>
+<path d="M66 730H780" stroke="#171713" stroke-width="2"/>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200">
+<defs><pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#F2EBDD" stroke-width="1" opacity=".13"/></pattern></defs>
+<rect width="1600" height="1200" fill="#171713"/><rect width="1600" height="1200" fill="url(#grid)"/>
+<g fill="none" stroke="#F2EBDD" stroke-width="3"><path d="M80 270V80H270M1330 80h190v190M80 930v190h190M1330 1120h190V930"/></g>
+<g fill="#F2EBDD" font-family="Arial,sans-serif"><text x="95" y="163" font-size="23" letter-spacing="3">03 / PRIME MAMMOTH</text><text x="800" y="651" text-anchor="middle" font-size="305" font-weight="900" letter-spacing="-18">ARDEN</text><text x="800" y="733" text-anchor="middle" font-size="30" letter-spacing="4">YOUR PTERODACTYL. YOUR BRAND.</text><text x="95" y="1038" font-size="23" letter-spacing="3">ARTWORK PLACEHOLDER</text><text x="1505" y="1038" text-anchor="end" font-size="23" letter-spacing="3">1600 × 1200 UI FEATURE</text></g>
+<path d="M740 340h120M800 280v120" stroke="#DF4C2F" stroke-width="17"/>
+</svg>
