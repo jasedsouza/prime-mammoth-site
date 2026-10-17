@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://jasedsouza.github.io/prime-mammoth-site/sitemap-index.xml
+Sitemap: https://www.primemammoth.com/sitemap-index.xml
