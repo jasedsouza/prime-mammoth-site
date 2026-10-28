@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="author" content="Prime Mammoth">
+  <meta name="description" content="Choose an order, collect supplies, craft your look and race to deliver in a colourful fashion town.">
+  <meta name="application-version" content="1.0.0">
+  <title>Make Your Design — Play now | Prime Mammoth</title>
+  <!-- distribution-meta-start -->
+  <link rel="canonical" href="https://www.primemammoth.com/games/make-your-design/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Prime Mammoth">
+  <meta property="og:title" content="Make Your Design — Play now | Prime Mammoth">
+  <meta property="og:description" content="Choose an order, collect supplies, craft your look and race to deliver in a colourful fashion town.">
+  <meta property="og:url" content="https://www.primemammoth.com/games/make-your-design/">
+  <meta property="og:image" content="https://www.primemammoth.com/images/projects/make-your-design/hero.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Make Your Design — Play now | Prime Mammoth">
+  <meta name="twitter:description" content="Choose an order, collect supplies, craft your look and race to deliver in a colourful fashion town.">
+  <meta name="twitter:image" content="https://www.primemammoth.com/images/projects/make-your-design/hero.webp">
+  <!-- distribution-meta-end -->
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/0.180.0/build/three.module.js",
+        "three/addons/": "./vendor/three/0.180.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true" focusable="false">
+    <symbol id="icon-heart" viewBox="0 0 48 48"><path d="M24 41S6 31 6 17C6 7 19 4 24 13 29 4 42 7 42 17c0 14-18 24-18 24Z"/></symbol>
+    <symbol id="icon-star" viewBox="0 0 48 48"><path d="m24 4 6 13 14 2-10 10 3 15-13-7-13 7 3-15L4 19l14-2 6-13Z"/></symbol>
+    <symbol id="icon-flower" viewBox="0 0 48 48"><circle cx="24" cy="10" r="8"/><circle cx="38" cy="22" r="8"/><circle cx="32" cy="38" r="8"/><circle cx="16" cy="38" r="8"/><circle cx="10" cy="22" r="8"/><circle cx="24" cy="25" r="7"/></symbol>
+    <symbol id="icon-bow" viewBox="0 0 48 48"><path d="M22 19C13 7 4 9 6 22c1 7 9 9 16 3v-6Zm4 0c9-12 18-10 16 3-1 7-9 9-16 3v-6Z"/><rect x="20" y="18" width="8" height="12" rx="3"/></symbol>
+    <symbol id="icon-belt" viewBox="0 0 48 48"><path d="M5 18h38v12H5z"/><rect x="18" y="14" width="14" height="20" rx="2"/><path d="M22 19h6v10h-6"/></symbol>
+    <symbol id="icon-ruffle" viewBox="0 0 48 48"><path d="M5 25c4-13 10-13 14 0s10 13 14 0 7-13 10 0v9H5v-9Z"/></symbol>
+    <symbol id="icon-dress" viewBox="0 0 48 48"><path d="M17 5h14l-2 13 11 25H8l11-25-2-13Z"/><path d="M17 12h14"/></symbol>
+    <symbol id="icon-top" viewBox="0 0 48 48"><path d="m15 7-11 8 7 9 5-4v22h16V20l5 4 7-9-11-8-5 5h-8l-5-5Z"/></symbol>
+    <symbol id="icon-skirt" viewBox="0 0 48 48"><path d="M15 7h18l8 36H7l8-36Z"/><path d="M13 15h22"/></symbol>
+    <symbol id="icon-hanger" viewBox="0 0 48 48"><path d="M20 11c0-8 11-8 11 0 0 5-7 6-7 11L4 37h40L24 22"/></symbol>
+    <symbol id="icon-coin" viewBox="0 0 48 48"><circle cx="24" cy="24" r="19"/><path d="M29 16c-5-4-13-2-13 3 0 7 16 2 16 10 0 6-9 8-16 3M24 11v26"/></symbol>
+    <symbol id="icon-sparkle" viewBox="0 0 48 48"><path d="M24 3c2 12 7 17 19 19-12 2-17 7-19 19-2-12-7-17-19-19 12-2 17-7 19-19Z"/></symbol>
+    <symbol id="icon-arrow" viewBox="0 0 48 48"><path d="M5 24h34M26 10l14 14-14 14"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 48 48"><path d="m7 25 11 11L42 11"/></symbol>
+    <symbol id="icon-crown" viewBox="0 0 48 48"><path d="m5 12 11 10 8-16 8 16 11-10-4 27H9L5 12Z"/></symbol>
+    <symbol id="icon-bag" viewBox="0 0 48 48"><path d="M8 17h32l-2 26H10L8 17Z"/><path d="M17 19v-6a7 7 0 0 1 14 0v6"/></symbol>
+    <symbol id="icon-sound" viewBox="0 0 48 48"><path d="M6 19h9l11-9v28L15 29H6V19Z"/><path d="M33 17c5 4 5 10 0 14M38 11c9 8 9 18 0 26"/></symbol>
+  </svg>
+  <canvas id="game-canvas" aria-label="Make Your Design 3D game"></canvas>
+
+  <div id="title-screen" class="screen active">
+    <div class="title-panel">
+      <div class="game-logo" aria-label="Make Your Design">
+        <svg class="logo-crown"><use href="#icon-crown"/></svg>
+        <svg class="logo-heart"><use href="#icon-heart"/></svg>
+        <span class="logo-make">MAKE</span>
+        <span class="logo-your">YOUR</span>
+        <span class="logo-design">DESIGN</span>
+        <svg class="logo-star"><use href="#icon-star"/></svg>
+      </div>
+      <p class="subtitle title-ribbon">FIND IT <b>•</b> STYLE IT <b>•</b> SELL IT</p>
+      <p class="arcade-tagline">90 SECONDS. SIX DISTRICTS. BIG STYLE.</p>
+      <p class="title-loop">Choose an order • Collect supplies • Create your style • Deliver</p>
+      <p id="best-score" class="best-score hidden"></p>
+      <p id="loading-status" role="status">Loading your fashion town…</p>
+      <button id="play-button" class="primary big-button" disabled>PLAY <svg><use href="#icon-arrow"/></svg></button>
+      <button id="retry-load" class="secondary hidden" onclick="location.reload()">RETRY LOADING</button>
+      <button id="practice-button" class="text-button" disabled>HOW TO PLAY</button>
+    </div>
+    <a class="studio-return" href="../../" aria-label="Back to Prime Mammoth website">← PRIME MAMMOTH</a>
+    <button id="title-credits-button" class="text-button">CREDITS</button>
+    <p class="title-side-note">DUCK PARADES.<br><b>RUNWAY SHORTCUTS.</b></p>
+    <p class="control-hint title-controls">MOVE · JUMP · INTERACT · DROP · BAG</p>
+  </div>
+
+  <main id="hud" class="hidden" aria-live="polite">
+    <div class="hud-zone hud-left">
+      <div class="stats-panel">
+      <div class="stat hud-panel" id="coin-stat">
+        <svg aria-hidden="true"><use href="#icon-coin"/></svg>
+        <span><small>COINS</small><small id="upgrade-progress">NEXT UPGRADE 0 / 40</small><strong id="coins-value">0</strong></span>
+      </div>
+      <div class="stat materials-stat hud-panel" id="materials-stat">
+        <svg aria-hidden="true"><use href="#icon-bag"/></svg>
+        <span><small>MATERIALS <b id="capacity-value">0/6</b></small><strong id="materials-value">GARMENT ×0 · DYE ×0 · PATCH ×0 · TRIM ×0</strong></span>
+      </div>
+      </div>
+      <div id="target-card" class="hud-panel target-card hidden"><small id="collection-heading">BUILD YOUR LOOK</small><strong id="target-name"></strong><span id="target-look"></span><div id="target-components" class="target-components" role="group" aria-label="Materials to collect: choose one of each" hidden></div><span id="target-style" class="customer-style"></span></div>
+    </div>
+    <div class="hud-zone hud-centre">
+      <div id="objective-card" class="hud-panel objective-card">CHOOSE A CUSTOMER BRIEF</div>
+      <div id="direction-card" class="direction-card"><svg id="direction-arrow" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 5L43 27H31V43H17V27H5Z"/></svg><span id="direction-text"></span></div>
+      <div class="timer-stack"><div id="timer-card" class="hud-panel timer-card"><span id="timer-status"></span><strong id="timer-value">01:30</strong></div>
+      <div id="order-timer-card" class="hud-panel order-timer-card hidden"><span>DELIVERY DEADLINE</span><strong id="order-timer-value">00:45</strong></div></div>
+    </div>
+    <div class="hud-zone hud-right">
+      <button id="sound-button" class="hud-button" aria-label="Toggle sound"><svg><use href="#icon-sound"/></svg><span id="sound-state">ON</span></button>
+      <button id="orders-button" class="hud-button" aria-label="Choose an order">ORDERS</button>
+      <button id="guide-button" class="hud-button" aria-label="Guide for ten active seconds">GUIDE · G</button><button id="pause-button" class="hud-button" aria-label="Pause game">Ⅱ</button>
+      <div id="score-card" class="hud-panel score-card"><small>SCORE</small><strong id="score-value">0</strong><span id="combo-value"></span></div>
+    </div>
+    <div id="assistant-popup" class="assistant-popup">+10 ASSISTANT</div>
+
+    <aside id="town-map" class="town-map hud-panel" aria-label="Town map">
+      <strong>FASHION CIRCUIT</strong>
+      <svg viewBox="0 0 40 40" role="img" aria-label="Town districts, supplies, studios, player and objective">
+        <g id="town-map-static"></g>
+        <g id="town-map-orders"></g>
+        <circle id="town-map-objective" cx="20" cy="20" r="1.7" fill="none" stroke="#FFD84A" stroke-width=".6"/>
+        <circle id="town-map-player" cx="16" cy="16" r=".9" fill="#29213D" stroke="#FFF4DF" stroke-width=".35"/>
+      </svg>
+      <p id="town-map-caption">Meet a customer · E to accept</p>
+      <small>G GARMENT · D DYE · M MOTIF · T TRIM<br>◆ CRAFT · ⌂ SHOP · ● YOU</small>
+    </aside>
+    <div id="interaction-prompt" class="interaction-prompt"><kbd>E</kbd><span></span></div>
+    <div id="bag-full-warning" class="bag-full-warning" aria-live="polite">
+      <strong>BAG FULL</strong><span><kbd>Q</kbd> DROP LAST ITEM</span><span><kbd>B</kbd> MANAGE BAG</span>
+    </div>
+  </main>
+
+  <aside id="practice-guide" class="practice-guide hidden" aria-live="polite"><strong>PRACTICE · NO TIME LIMIT</strong><p id="practice-instruction"></p><button id="skip-practice" class="secondary">SKIP · START RUN</button></aside>
+  <div id="touch-controls" class="touch-controls hidden" aria-label="Touch game controls">
+    <div id="joystick" role="group" aria-label="Movement joystick"><span id="joystick-thumb"></span><small>MOVE</small></div>
+    <div class="touch-actions"><button id="touch-interact" aria-label="Interact">INTERACT</button><button id="touch-jump" aria-label="Jump">JUMP</button><button id="touch-drop" aria-label="Drop last item">DROP</button><button id="touch-guide" aria-label="Guide for ten active seconds">GUIDE</button><button id="touch-bag" aria-label="Open bag">BAG</button></div>
+  </div>
+  <div id="pause-screen" class="screen" role="dialog" aria-modal="true" aria-labelledby="pause-heading"><section class="pause-panel"><h2 id="pause-heading">PAUSED</h2><p>Your run and delivery clocks are stopped.</p><button id="resume-button" class="primary">RESUME</button><button id="pause-title-button" class="secondary">BACK TO TITLE</button><a class="studio-return" href="../../">← PRIME MAMMOTH</a></section></div>
+
+  <div id="orders-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="orders-heading">
+    <div class="modal-backdrop"></div>
+    <section class="modal-card order-board-card">
+      <header><p class="eyebrow">YOUR NEXT DELIVERY</p><h2 id="orders-heading">CHOOSE YOUR ORDER</h2><p>Short trip or big reward? Your run clock is paused.</p></header>
+      <div id="order-board-items" class="order-board-items"></div>
+      <p class="order-board-note">Higher difficulty multiplies score. Faster delivery earns survival time; Late costs time and coins.</p>
+      <footer><button id="close-orders" class="secondary">EXPLORE TOWN</button></footer>
+    </section>
+  </div>
+
+  <div id="design-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="design-heading">
+    <div class="modal-backdrop"></div>
+    <section class="modal-card design-card">
+      <header><p class="eyebrow">DESIGN STUDIO</p><h2 id="design-heading">CREATE YOUR LOOK</h2><p>Style it, then time your stitch.</p></header>
+      <div class="customer-strip-wrap"><h3>CUSTOMER ORDER</h3><div id="customer-cards" class="customer-strip"></div></div>
+      <div class="design-layout">
+        <div class="preview-column">
+          <div class="preview-stage fashion-stage">
+            <div id="studio-reveal" class="studio-reveal" aria-live="polite"></div>
+            <svg id="fashion-preview" viewBox="0 0 300 380" role="img" aria-label="Live garment preview">
+              <circle cx="35" cy="55" r="9" class="preview-dot lavender-dot"/><circle cx="265" cy="72" r="13" class="preview-dot mint-dot"/><circle cx="252" cy="325" r="8" class="preview-dot peach-dot"/>
+              <ellipse class="studio-floor" cx="150" cy="360" rx="76" ry="12"/><g class="mannequin"><ellipse cx="150" cy="48" rx="19" ry="24"/><path d="M140 70h20v25h-20Z M106 94Q150 81 194 94L178 188Q150 201 122 188Z"/><path class="mannequin-limbs" d="M103 102Q81 149 90 219M197 102Q219 149 210 219M131 190L126 346 111 350M169 190L174 346 189 350"/></g>
+              <g id="garment-layer"></g>
+            </svg>
+          </div>
+          <div id="match-preview" class="match-preview"></div>
+          <div id="style-roll" class="style-roll" aria-live="polite">
+            <strong id="style-roll-status">STYLE ROLL</strong>
+            <div><span>CUT <b id="roll-cut">—</b></span><span>ACCENT <b id="roll-accent">—</b></span><span>RARITY <b id="roll-rarity">—</b></span></div>
+            <p id="design-result"></p>
+          </div>
+        </div>
+        <div class="design-options"><strong id="designer-style-brief" hidden></strong><nav class="design-tabs" role="tablist" aria-label="Design categories"><button role="tab" id="design-tab-garment" aria-controls="design-panel-garment" aria-selected="true" data-design-tab="garment"><i class="category-icon">G</i>GARMENT</button><button role="tab" id="design-tab-colour" aria-controls="design-panel-colour" aria-selected="false" data-design-tab="colour"><i class="category-icon">D</i>COLOUR</button><button role="tab" id="design-tab-motif" aria-controls="design-panel-motif" aria-selected="false" data-design-tab="motif"><i class="category-icon">M</i>MOTIF</button><button role="tab" id="design-tab-trim" aria-controls="design-panel-trim" aria-selected="false" data-design-tab="trim"><i class="category-icon">T</i>TRIM</button><button role="tab" id="design-tab-cut" aria-controls="design-panel-cut" aria-selected="false" data-design-tab="cut">CUT</button><button role="tab" id="design-tab-accent" aria-controls="design-panel-accent" aria-selected="false" data-design-tab="accent">ACCENT</button></nav><div class="option-tray"><section data-design-panel="garment" role="tabpanel" id="design-panel-garment" aria-labelledby="design-tab-garment"><h3>GARMENT</h3><div id="garment-options" class="option-grid garments">
+            <button data-garment="DRESS" class="selected"><svg><use href="#icon-dress"/></svg>DRESS</button>
+            <button data-garment="TOP"><svg><use href="#icon-top"/></svg>TOP</button>
+            <button data-garment="SKIRT"><svg><use href="#icon-skirt"/></svg>SKIRT</button>
+          </div></section>
+<section data-design-panel="colour" role="tabpanel" id="design-panel-colour" aria-labelledby="design-tab-colour" hidden><h3>COLOUR</h3><div id="colour-options" class="option-grid colours">
+            <button data-colour="LAVENDER" class="selected"><i style="--swatch:#9A7BFF"></i>LAVENDER</button>
+            <button data-colour="MINT"><i style="--swatch:#75E5C1"></i>MINT</button>
+            <button data-colour="PEACH"><i style="--swatch:#FF9877"></i>PEACH</button>
+            <button data-colour="SKY"><i style="--swatch:#70CFFF"></i>SKY</button>
+          </div></section>
+<section data-design-panel="motif" role="tabpanel" id="design-panel-motif" aria-labelledby="design-tab-motif" hidden><h3>MOTIF</h3><div id="motif-options" class="option-grid patterns">
+            <button data-motif="STAR" class="selected"><svg><use href="#icon-star"/></svg>STAR</button>
+            <button data-motif="HEART"><svg><use href="#icon-heart"/></svg>HEART</button>
+            <button data-motif="FLOWER"><svg><use href="#icon-flower"/></svg>FLOWER</button>
+          </div></section>
+<section data-design-panel="trim" role="tabpanel" id="design-panel-trim" aria-labelledby="design-tab-trim" hidden><h3>TRIM</h3><div id="trim-options" class="option-grid trims">
+            <button data-trim="BOW" class="selected"><svg><use href="#icon-bow"/></svg>BOW</button>
+            <button data-trim="BELT"><svg><use href="#icon-belt"/></svg>BELT</button>
+            <button data-trim="RUFFLE"><svg><use href="#icon-ruffle"/></svg>RUFFLE</button>
+          </div></section>
+<section data-design-panel="cut" role="tabpanel" id="design-panel-cut" aria-labelledby="design-tab-cut" hidden><h3>CUT</h3><div id="cut-options" class="option-grid cuts">
+            <button data-cut="CLASSIC">CLASSIC</button><button data-cut="PUFFY">PUFFY</button><button data-cut="LAYERED">LAYERED</button><button data-cut="ASYMMETRIC">ASYMMETRIC</button>
+          </div></section>
+<section data-design-panel="accent" role="tabpanel" id="design-panel-accent" aria-labelledby="design-tab-accent" hidden><h3>ACCENT</h3><div id="accent-options" class="option-grid accents"></div></section></div><p class="style-help">Try it. See it. Make it yours.</p></div>
+      </div>
+      <p id="design-supply-status" role="status"></p><footer><div id="craft-challenge" class="craft-challenge hidden"><strong id="craft-status" role="status" aria-live="polite">HIT THE GREEN CENTRE</strong><div class="craft-track"><span class="craft-good"></span><span class="craft-perfect"></span><i id="craft-marker"></i></div><small>Green centre: PERFECT · gold: GOOD · outside: MISS</small></div><button id="stop-craft" class="primary hidden">STOP</button><button id="cancel-design" class="secondary">BACK</button><button id="create-design" class="primary">MAKE IT!</button><button id="take-design" class="primary hidden">TAKE LOOK</button></footer>
+    </section>
+  </div>
+
+  <div id="results-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="results-heading">
+    <section class="modal-card results-card"><h2 id="results-heading">CUSTOMER VERDICT</h2><div id="sale-results" class="sale-results"></div><footer><button id="next-job" class="primary">NEXT JOB</button><button id="visit-shop" class="secondary hidden">UPGRADE READY · VISIT SHOP</button></footer></section>
+  </div>
+  <div id="shop-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="shop-heading">
+    <div class="modal-backdrop"></div>
+    <section class="modal-card shop-card">
+      <header><p class="eyebrow"><svg><use href="#icon-crown"/></svg> MY SHOP</p><h2 id="shop-heading">RUN YOUR FASHION LABEL</h2><p>Upgrades and stock last for THIS RUN. Sell looks directly to customers.</p></header>
+      <nav id="shop-tabs" class="shop-tabs" aria-label="Shop sections">
+        <button class="active" data-shop-tab="orders">ORDERS</button>
+        <button data-shop-tab="stockroom">STOCKROOM</button>
+        <button data-shop-tab="showcase">SHOWCASE</button>
+        <button data-shop-tab="upgrades">UPGRADES</button>
+      </nav>
+      <section id="shop-orders" class="shop-section active" aria-labelledby="shop-heading">
+        <div class="shop-section-heading"><div><h3>ORDERS</h3><p>Choose the next fashion rush from the same customers waiting in town.</p></div></div>
+        <div id="shop-order-items" class="shop-order-items"></div>
+      </section>
+      <section id="shop-stockroom" class="shop-section" aria-labelledby="shop-heading">
+        <div class="shop-section-heading"><div><h3>STOCKROOM</h3><p>Move spare materials between your bag and eight storage slots.</p></div><strong id="stockroom-usage">0 / 8</strong></div>
+        <div id="stockroom-items" class="stockroom-items"></div>
+      </section>
+      <section id="shop-showcase" class="shop-section" aria-labelledby="shop-heading">
+        <div class="shop-section-heading"><div><h3>SHOWCASE</h3><p>Your three best garments sold this run.</p></div></div>
+        <div id="showcase-items" class="showcase-items"></div>
+      </section>
+      <section id="shop-upgrades" class="shop-section" aria-labelledby="shop-heading">
+        <div class="shop-section-heading"><div><h3>UPGRADES</h3><p>Invest today’s earnings back into your label.</p></div></div>
+        <div id="upgrade-cards" class="upgrade-grid"></div>
+      </section>
+      <footer><button id="close-shop" class="secondary">CLOSE</button></footer>
+    </section>
+  </div>
+
+  <div id="bag-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="bag-heading">
+    <div class="modal-backdrop"></div>
+    <section class="modal-card bag-card">
+      <button id="close-bag-x" class="modal-close" aria-label="Close bag">×</button>
+      <header><p class="eyebrow">INVENTORY</p><h2 id="bag-heading">YOUR BAG</h2><p id="bag-usage">0 / 6 SLOTS USED</p><p>Choose supplies with INTERACT. Practice and your first delivery help collect missing categories. Full bag? Drop items here or store them at MY SHOP.</p></header>
+      <div id="bag-items" class="bag-items"></div>
+      <footer><button id="close-bag" class="secondary">CLOSE</button></footer>
+    </section>
+  </div>
+
+  <div id="credits-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="credits-heading">
+    <div class="modal-backdrop"></div>
+    <section class="modal-card credits-card">
+      <header><p class="eyebrow">CREDITS</p><h2 id="credits-heading">MAKE YOUR DESIGN</h2></header>
+      <p class="creator-credit">Created by<br><strong>Prime Mammoth</strong><br>Version 1.0.0</p>
+      <p><strong>Kenney Mini Characters</strong><br>by Kenney<br><a href="https://kenney.nl/assets/mini-characters" target="_blank" rel="noreferrer">kenney.nl/assets/mini-characters</a><br>CC0 1.0</p>
+      <p><strong>Kenney Nature Kit</strong><br>by Kenney<br><a href="https://kenney.nl/assets/nature-kit" target="_blank" rel="noreferrer">kenney.nl/assets/nature-kit</a><br>CC0 1.0</p>
+      <p><strong>Music · CC0</strong><br><a href="https://opengameart.org/content/kawaii-8bit" target="_blank" rel="noreferrer">Kawaii 8bit</a> — haruta<br><a href="https://opengameart.org/content/flowerbed-fields-loop" target="_blank" rel="noreferrer">Flowerbed Fields</a> — Zane Little Music<br><a href="https://opengameart.org/content/happy-loop" target="_blank" rel="noreferrer">Happy Loop</a> — wipics</p>
+      <p><strong>Three.js</strong> — Three.js authors · MIT<br><strong>Fonts</strong> — Dela Gothic One, Fredoka, Bungee · SIL OFL 1.1</p>
+      <footer><button id="close-credits" class="secondary">CLOSE</button></footer>
+    </section>
+  </div>
+
+  <div id="game-over-screen" class="screen">
+    <section class="game-over-panel">
+      <p class="eyebrow">TIME'S UP</p><h2>RUN COMPLETE!</h2>
+      <p class="final-label">FINAL SCORE</p><strong id="final-score">0</strong>
+      <div id="final-stats" class="final-stats"></div>
+      <p id="best-comparison" class="best-comparison"></p>
+      <h3>YOUR TOP 5 RUNS</h3><div id="high-score-list" class="high-score-list"></div>
+      <div class="game-over-actions"><button id="play-again-button" class="primary">PLAY AGAIN</button><button id="title-button" class="secondary">TITLE</button><button id="game-over-credits-button" class="text-button">CREDITS</button></div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <div id="popup-layer" class="popup-layer"></div>
+  <script type="module">
+    import('./game.js').catch(() => {
+      document.querySelector('#loading-status').textContent = 'The town could not load. Check your connection and WebGL support, then retry.';
+      document.querySelector('#retry-load').classList.remove('hidden');
+    });
+  </script>
+</body>
+</html>

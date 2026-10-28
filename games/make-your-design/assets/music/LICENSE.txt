@@ -1,0 +1,9 @@
+All three original tracks are released under CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+title.mp3: Kawaii 8bit, haruta
+https://opengameart.org/content/kawaii-8bit
+gameplay.ogg: Flowerbed Fields, Zane Little Music
+https://opengameart.org/content/flowerbed-fields-loop
+gameover.mp3: Happy Loop, wipics
+https://opengameart.org/content/happy-loop
