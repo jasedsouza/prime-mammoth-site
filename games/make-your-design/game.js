@@ -5,7 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 // Distribution adapters own platform services; gameplay remains entirely static.
-const platform = { adapter, gameplay:false, desiredGameplay:false, eventAdapter:null, eventTimer:null, lastEvents:{}, loading:false, muteAudio:false, memory:new Map(), storageFailed:false };
+const platform = { adapter, gameplay:false, desiredGameplay:false, eventAdapter:null, eventTimer:null, lastEvents:{}, loading:false, muteAudio:false, adPending:false, adPlaying:false, memory:new Map(), storageFailed:false };
 const SETTINGS_KEY = 'makeYourDesignSettingsV1';
 let onboardingSeen = false;
 let gameReady = false;
@@ -16,6 +16,8 @@ let suspendedAt = null;
 let suspendedDuration = 0;
 const gameTasks = new Map();
 let nextTaskId = 0;
+// Capture game-owned controls before any SDK can insert its advertisement UI.
+const gameInteractionLayers=[...document.querySelectorAll('.screen,.modal,#hud,#touch-controls,#practice-guide')];
 const touchInput = { x:0, y:0, pointerId:null };
 const touchDevice = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 const gameViewport = readGameViewport();
@@ -70,7 +72,7 @@ function syncPlatformGameplay() {
   if(platform.eventAdapter!==platform.adapter){
     clearTimeout(platform.eventTimer);platform.eventTimer=null;platform.eventAdapter=platform.adapter;platform.lastEvents={};platform.gameplay=false;
   }
-  platform.desiredGameplay=gameReady&&gameState.started&&!gameState.gameOver&&!gameState.modalOpen&&!manualPaused;
+  platform.desiredGameplay=gameReady&&gameState.started&&!gameState.gameOver&&!gameState.modalOpen&&!manualPaused&&!platform.adPending;
   flushPlatformGameplay();
 }
 function flushPlatformGameplay() {
@@ -104,7 +106,8 @@ function loadSettings() {
   syncAudio();
 }
 function syncAudio() {
-  const muted=!gameState.soundEnabled||platform.muteAudio||simulationSuspended();
+  // Requesting an ad blocks progression, but only actual ad playback mutes music.
+  const muted=!gameState.soundEnabled||platform.muteAudio||platform.adPlaying||[...suspendReasons].some(reason=>reason!=='ad-request');
   if(masterGain){
     // Clear earlier transition events, including a suspended context's frozen time.
     masterGain.gain.cancelScheduledValues(0);
@@ -115,7 +118,12 @@ function syncAudio() {
 }
 async function initPlatform() {
   try {
-    await platform.adapter.init({onMuteChange:muted=>{platform.muteAudio=Boolean(muted);syncAudio();}});
+    await platform.adapter.init({onMuteChange:muted=>{platform.muteAudio=Boolean(muted);syncAudio();},onAdPauseChange:paused=>{
+      const wasPaused=suspendReasons.has('platform-ad');
+      setSuspended('platform-ad',paused);
+      if(!paused&&wasPaused&&!platform.adPending&&gameState.started&&!gameState.gameOver)setManualPause(true);
+      updateControlVisibility();
+    }});
     platform.loading=true;platformEvent('loadingStart');
   } catch { /* Platform initialization must not prevent ordinary static play. */ }
 }
@@ -1564,6 +1572,7 @@ const jumpStartPosition = new THREE.Vector2();
 let jumpTakeoffSpeed = 0;
 let jumpOrderCustomerId = null;
 window.addEventListener('keydown', event => {
+  if(platform.adPending||suspendReasons.has('platform-ad'))return;
   if(event.code==='Space'&&gameState.modalOpen==='design'&&craftChallenge){event.preventDefault();if(!event.repeat&&!simulationSuspended())stopCraftChallenge();return;}
   if(gameState.modalOpen==='results'&&!simulationSuspended()){if(['Space','Enter','KeyE'].includes(event.code)&&!event.repeat){event.preventDefault();if(document.activeElement?.id==='visit-shop'&&event.code!=='KeyE')continueSale(true);else continueSale();}return;}
   if(event.code==='KeyG'&&!event.repeat){activateGuide();return;}
@@ -3487,6 +3496,43 @@ function resetRunState() {
   refreshWorldShowcase();
   document.querySelectorAll('.modal').forEach(modal=>modal.classList.remove('open')); document.querySelector('#game-over-screen').classList.remove('active'); resetStudioReveal();
 }
+async function restartAfterRun() {
+  if(platform.adPending||!gameState.gameOver)return;
+  return transitionWithAd('requestMidgameAd',()=>beginRun(false),()=>gameState.gameOver,'Starting next run…');
+}
+async function transitionWithAd(method,action,current=()=>true,message='Preparing game…') {
+  if(platform.adPending||suspendReasons.has('platform-ad')||!current())return;
+  if(!platform.adapter[method]){action();return;}
+  const generation=runGeneration;
+  platform.adPending=true;setSuspended('ad-request',true);syncPlatformGameplay();
+  const screens=gameInteractionLayers,inert=screens.map(element=>element.inert);
+  const focus=document.activeElement;
+  screens.forEach(element=>element.inert=true);
+  const overlay=document.createElement('div');overlay.id='ad-wait';overlay.setAttribute('role','status');overlay.tabIndex=-1;
+  overlay.textContent=message;
+  overlay.style.cssText='position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:#fff4dfee;color:#29213d;font:700 24px sans-serif';
+  document.body.appendChild(overlay);overlay.focus();
+  // Keep button activation accessible without intercepting the SDK's own UI.
+  overlay.addEventListener('keydown',event=>event.stopPropagation());
+  try {
+    const result=await platform.adapter[method]({onStarted:()=>{
+      if(platform.adPending&&runGeneration===generation){platform.adPlaying=true;overlay.style.display='none';syncAudio();}
+    }});
+    platform.adPlaying=false;overlay.style.display='grid';syncAudio();
+    if(result?.played&&platform.adapter.requiresAdContinue&&runGeneration===generation&&current()){
+      overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Advertisement finished');
+      overlay.replaceChildren();
+      const button=document.createElement('button');button.className='primary big-button';button.textContent='CONTINUE';overlay.appendChild(button);button.focus();
+      await new Promise(resolve=>button.addEventListener('click',resolve,{once:true}));
+    }
+  } catch { /* Unavailable advertisements never prevent another run. */ }
+  finally {
+    platform.adPlaying=false;platform.adPending=false;setSuspended('ad-request',false);
+    screens.forEach((element,index)=>element.inert=inert[index]);overlay.remove();
+    if(runGeneration===generation&&current())action();
+    if(focus?.isConnected&&focus.getClientRects().length)focus.focus();
+  }
+}
 function beginRun(fromTitle) {
   resetRunState(); initAudio(); if(audioContext?.state==='suspended')audioContext.resume().catch(()=>{}); musicController.unlock(); musicController.setState('gameplay');syncAudio();
   gameState.started=true; titleStartCamera.copy(camera.position); cameraTarget.set(0,1,0); titleTransitionElapsed=fromTitle?0:.7; gameState.timerStarted=!fromTitle;
@@ -3510,9 +3556,9 @@ function bindUI() {
   };
   document.addEventListener('pointerdown', unlockAudio, { capture:true });
   document.addEventListener('keydown', unlockAudio, { capture:true });
-  document.querySelector('#play-button').addEventListener('click', () => { if(gameReady){if(onboardingSeen)beginRun(true);else beginPractice();} });
-  document.querySelector('#play-again-button').addEventListener('click', () => beginRun(false));
-  document.querySelector('#title-button').addEventListener('click', returnToTitle);
+  document.querySelector('#play-button').addEventListener('click', () => transitionWithAd('requestPrerollAd',()=>{if(onboardingSeen)beginRun(true);else beginPractice();},()=>gameReady&&!gameState.started));
+  document.querySelector('#play-again-button').addEventListener('click', restartAfterRun);
+  document.querySelector('#title-button').addEventListener('click',()=>transitionWithAd('requestMenuAd',returnToTitle,()=>gameState.gameOver,'Returning to title…'));
   document.querySelector('#game-over-credits-button').addEventListener('click', () => openModal('credits'));
   document.querySelector('#sound-button').addEventListener('click', () => { gameState.soundEnabled=!gameState.soundEnabled;saveSettings();syncAudio(); });
   document.querySelector('#close-shop').addEventListener('click', () => closeModal('shop'));
