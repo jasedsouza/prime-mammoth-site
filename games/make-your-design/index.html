@@ -79,6 +79,19 @@
   </div>
 
   <main id="hud" class="hidden" aria-live="polite">
+    <div id="phone-hud">
+      <div class="phone-status">
+        <div class="phone-counters">
+          <span aria-label="Coins"><svg aria-hidden="true"><use href="#icon-coin"/></svg><b id="phone-coins">0</b></span>
+          <span aria-label="Bag capacity"><svg aria-hidden="true"><use href="#icon-bag"/></svg><b id="phone-capacity">0/6</b></span>
+          <span aria-label="Score"><svg aria-hidden="true"><use href="#icon-star"/></svg><b id="phone-score">0</b></span>
+        </div>
+        <button id="phone-details-button" class="hud-button" aria-label="Open game details" aria-haspopup="dialog">DETAILS</button>
+        <div id="phone-pause"></div>
+      </div>
+      <div id="phone-navigation"><span id="phone-hint"></span></div>
+    </div>
+    <div id="phone-timers"></div>
     <div class="hud-zone hud-left">
       <div class="stats-panel">
       <div class="stat hud-panel" id="coin-stat">
@@ -129,6 +142,19 @@
     <div class="touch-actions"><button id="touch-interact" aria-label="Interact">INTERACT</button><button id="touch-jump" aria-label="Jump">JUMP</button><button id="touch-drop" aria-label="Drop last item">DROP</button><button id="touch-guide" aria-label="Guide for ten active seconds">GUIDE</button><button id="touch-bag" aria-label="Open bag">BAG</button></div>
   </div>
   <div id="pause-screen" class="screen" role="dialog" aria-modal="true" aria-labelledby="pause-heading"><section class="pause-panel"><h2 id="pause-heading">PAUSED</h2><p>Your run and delivery clocks are stopped.</p><button id="resume-button" class="primary">RESUME</button><button id="pause-title-button" class="secondary">BACK TO TITLE</button><a class="studio-return" href="../../">← PRIME MAMMOTH</a></section></div>
+
+  <div id="details-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="details-heading">
+    <div class="modal-backdrop"></div>
+    <section class="modal-card phone-details-card">
+      <header><h2 id="details-heading" tabindex="-1">GAME DETAILS</h2><p>Your run and delivery clocks are paused.</p></header>
+      <div id="details-practice"></div>
+      <div id="details-brief"><p id="details-no-order">Meet a customer or choose an order to begin.</p></div>
+      <div id="details-stats"></div>
+      <div id="details-map"></div>
+      <div id="details-actions"></div>
+      <footer><button id="close-details" class="primary">BACK TO GAME</button></footer>
+    </section>
+  </div>
 
   <div id="orders-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="orders-heading">
     <div class="modal-backdrop"></div>
@@ -186,9 +212,9 @@
 <section data-design-panel="cut" role="tabpanel" id="design-panel-cut" aria-labelledby="design-tab-cut" hidden><h3>CUT</h3><div id="cut-options" class="option-grid cuts">
             <button data-cut="CLASSIC">CLASSIC</button><button data-cut="PUFFY">PUFFY</button><button data-cut="LAYERED">LAYERED</button><button data-cut="ASYMMETRIC">ASYMMETRIC</button>
           </div></section>
-<section data-design-panel="accent" role="tabpanel" id="design-panel-accent" aria-labelledby="design-tab-accent" hidden><h3>ACCENT</h3><div id="accent-options" class="option-grid accents"></div></section></div><p class="style-help">Try it. See it. Make it yours.</p></div>
+<section data-design-panel="accent" role="tabpanel" id="design-panel-accent" aria-labelledby="design-tab-accent" hidden><h3>ACCENT</h3><div id="accent-options" class="option-grid accents"></div></section></div><p class="style-help">Try it. See it. Make it yours.</p><div id="compact-reveal"></div></div>
       </div>
-      <p id="design-supply-status" role="status"></p><footer><div id="craft-challenge" class="craft-challenge hidden"><strong id="craft-status" role="status" aria-live="polite">HIT THE GREEN CENTRE</strong><div class="craft-track"><span class="craft-good"></span><span class="craft-perfect"></span><i id="craft-marker"></i></div><small>Green centre: PERFECT · gold: GOOD · outside: MISS</small></div><button id="stop-craft" class="primary hidden">STOP</button><button id="cancel-design" class="secondary">BACK</button><button id="create-design" class="primary">MAKE IT!</button><button id="take-design" class="primary hidden">TAKE LOOK</button></footer>
+      <p id="design-supply-status" role="status"></p><footer><div id="compact-supply-status"></div><div id="craft-challenge" class="craft-challenge hidden"><strong id="craft-status" role="status" aria-live="polite">HIT THE GREEN CENTRE</strong><div class="craft-track"><span class="craft-good"></span><span class="craft-perfect"></span><i id="craft-marker"></i></div><small>Green centre: PERFECT · gold: GOOD · outside: MISS</small></div><button id="stop-craft" class="primary hidden">STOP</button><button id="cancel-design" class="secondary">BACK</button><button id="create-design" class="primary">MAKE IT!</button><button id="take-design" class="primary hidden">TAKE LOOK</button></footer>
     </section>
   </div>
 

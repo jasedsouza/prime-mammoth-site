@@ -766,3 +766,148 @@ body.practicing .practice-modal-skip{font-size:var(--text-body);min-height:44px}
 @media(max-width:640px) and (orientation:landscape){
   .touch-device #hud .score-card{position:fixed;left:calc(var(--safe-left) + 285px);right:auto;top:auto;bottom:var(--safe-bottom);width:90px;min-width:0}
 }
+
+/* One measured viewport for Safari browser chrome, canvas and overlays. */
+#game-canvas,.world-label-layer,.screen,.modal,#hud,.touch-controls,.popup-layer{
+  inset:auto;left:var(--game-left,0px);top:var(--game-top,0px);
+  width:var(--game-width,100vw);height:var(--game-height,100dvh);
+}
+#phone-hud,#phone-timers,#compact-reveal,#compact-supply-status{display:none}
+.compact-viewport #hud .hud-zone{display:none}
+.compact-viewport #phone-hud{display:block;position:absolute;left:var(--safe-left);right:var(--safe-right);top:var(--safe-top);pointer-events:none}
+.compact-viewport.inspecting #phone-hud,.compact-viewport.inspecting #phone-timers{visibility:hidden}
+.compact-viewport #phone-timers{display:block;position:absolute;right:var(--safe-right);bottom:var(--safe-bottom);padding:6px 8px;border:2px solid #5c536a;border-radius:8px;background:#fff9efed;pointer-events:none}
+.compact-viewport.touch-device #phone-timers{bottom:calc(var(--safe-bottom) + 104px)}
+.phone-status{display:flex;align-items:center;gap:4px;height:44px;background:#fff9efed;border-radius:8px;padding:0 3px}
+.phone-counters{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-around;gap:4px;font-size:14px;line-height:1}
+.phone-counters>span{display:flex;align-items:center;gap:2px;min-width:0}
+.phone-counters b{max-width:7ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.phone-counters svg{width:14px;height:14px;flex:none;fill:var(--sun);stroke:var(--ink);stroke-width:2}
+.compact-viewport #hud .hud-button{pointer-events:auto;min-width:44px;width:auto;height:44px;min-height:44px;padding:4px;font-size:14px;box-shadow:none;border-radius:6px}
+.compact-viewport #hud #phone-details-button{font-size:14px}
+.compact-viewport #hud .timer-stack{display:flex;align-items:center;gap:4px;margin:0;width:auto}
+.compact-viewport #hud .timer-card,.compact-viewport #hud .order-timer-card{position:static;transform:none;width:auto;min-width:66px;max-width:84px;padding:2px 5px;border:0;background:none;box-shadow:none;border-radius:4px}
+.compact-viewport #hud .timer-stack span{display:none}
+.compact-viewport #hud .timer-stack strong{font-size:16px;line-height:1.2}
+.compact-viewport #hud .timer-card strong{color:var(--ink);text-shadow:none}
+.compact-viewport #hud .timer-card.warning strong{color:#986500}
+.compact-viewport #hud .timer-card.urgent strong,.compact-viewport #hud .timer-card.critical strong{color:#bc2441}
+.compact-viewport #hud .timer-card:before,.compact-viewport #hud .order-timer-card:before{content:'RUN';display:block;font:700 14px/14px var(--ui);text-align:center}
+.compact-viewport #hud .order-timer-card:before{content:'DUE'}
+.compact-viewport #hud .timer-card{color:var(--ink)}
+.compact-viewport #hud .order-timer-card{color:#775299;border-left:1px solid #a89daf}
+.compact-viewport #hud .order-timer-card.late{max-width:none}
+.compact-viewport #hud .order-timer-card.late strong{font-size:14px;white-space:nowrap;max-width:none}
+.compact-viewport #hud #timer-card.hidden,.compact-viewport #hud #order-timer-card.hidden{display:none}
+.compact-viewport.practicing #hud #order-timer-card{display:none}
+#phone-navigation{display:flex;flex-direction:column;gap:0;margin-top:4px;background:#29213de8;color:#fff9ef;border-radius:6px;padding:3px 7px;height:44px;overflow:hidden}
+.compact-viewport #hud #direction-card{position:static;transform:none;display:flex;align-items:center;width:100%;max-width:100%;min-height:20px;padding:0;border:0;background:none;box-shadow:none;gap:5px;font-size:14px;line-height:20px}
+.compact-viewport #direction-arrow{width:20px;height:20px}
+.compact-viewport #direction-text,#phone-hint{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:18px}
+#phone-hint{font-family:var(--ui);font-weight:600;color:#ffe39b}
+.compact-viewport #interaction-prompt,.compact-viewport #bag-full-warning{display:none}
+.compact-viewport #joystick{width:100px;height:100px;left:var(--safe-left);bottom:var(--safe-bottom);box-shadow:none}
+.compact-viewport #joystick-thumb{left:calc(50% - 21px);top:calc(50% - 21px);width:42px;height:42px;margin:0}
+.compact-viewport .touch-actions{grid-template-columns:86px 62px 62px;grid-template-rows:44px 44px;gap:6px;right:var(--safe-right);bottom:var(--safe-bottom)}
+.compact-viewport .touch-actions button{font-size:14px;min-height:44px;padding:3px;border-width:2px;box-shadow:none;border-radius:8px}
+.compact-viewport #touch-interact{grid-column:1;grid-row:1}
+.compact-viewport #touch-jump{grid-column:2;grid-row:1}
+.compact-viewport #touch-guide{grid-column:3;grid-row:1}
+.compact-viewport #touch-drop{grid-column:2;grid-row:2}
+.compact-viewport #touch-bag{grid-column:3;grid-row:2}
+.compact-viewport .world-label,.compact-viewport .pickup-label,.compact-viewport .customer-bubble,.compact-viewport .customer-speech{max-width:155px;font-size:14px;padding:4px 6px}
+.compact-viewport #toast{top:calc(var(--game-top,0px) + var(--safe-top) + 48px);max-width:calc(var(--game-width,100vw) - var(--safe-left) - var(--safe-right));width:max-content;max-height:44px;overflow:hidden;padding:4px 8px;font-size:14px;line-height:18px;box-shadow:none}
+.compact-viewport .world-popup{top:calc(var(--safe-top) + 56px);max-width:90%;font-size:18px}
+
+/* Details uses the original HUD nodes with their normal update paths. */
+.phone-details-card{width:min(620px,100%);overflow-y:auto;overscroll-behavior:contain;scroll-padding-bottom:70px}
+#details-modal .hidden{display:none!important}
+#details-modal #practice-guide:not(.hidden){display:block}
+#details-modal .stats-panel,#details-modal #target-card,#details-modal #town-map,#details-modal #practice-guide{position:static!important;inset:auto!important;transform:none!important;width:100%;max-width:none;max-height:none;height:auto;margin:12px 0;padding:10px;overflow:visible;pointer-events:auto;border:2px solid #5c536a;border-radius:8px;background:#fff9ef;box-shadow:none}
+#details-modal .stats-panel{display:flex;flex-wrap:wrap;gap:8px}
+#details-modal .stat{min-width:0;height:auto;min-height:44px;padding:4px;flex:1}
+#details-modal .stat small{font-size:14px}
+#details-modal #upgrade-progress{max-width:none}
+#details-modal #score-card{position:static;inset:auto;width:auto;min-width:0;padding:8px;display:flex;gap:8px;margin:12px 0}
+#details-modal #target-card:not(.hidden){display:flex!important;flex-direction:column;align-items:flex-start;gap:6px}
+#details-modal #target-look{display:block}
+#details-modal #target-components{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+#details-modal #target-components[hidden]{display:none}
+#details-modal #target-components>span{display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:6px;background:#f1edf5}
+#details-modal #target-components>span.owned{background:#d9f1e7}
+#details-modal .personal-preferences{grid-column:1/-1}
+#details-modal #town-map svg{display:block;width:100%;height:200px}
+#details-modal #town-map>strong,#details-modal #town-map>small{display:block}
+#details-modal #town-map p{display:block;font-size:14px;line-height:1.3;margin:6px 0}
+#details-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+#details-actions button{min-width:44px;min-height:44px;padding:6px 12px}
+#details-modal #sound-button{display:flex;align-items:center;gap:8px;width:auto;height:auto}
+#details-modal #sound-button svg{width:24px;height:24px}
+#details-modal #sound-state{position:static;padding:0;background:none;border:0}
+#details-modal .practice-modal-skip{display:none!important}
+#details-modal footer{position:sticky;bottom:-12px;background:#fff9ef;padding:8px 0;z-index:5}
+
+/* Compact dialogs scroll where necessary; the designer below is fully bounded. */
+.compact-viewport .modal-card,.compact-viewport .game-over-panel,.compact-viewport .pause-panel{max-width:100%;max-height:100%;overflow-y:auto;overscroll-behavior:contain;padding:12px;scroll-padding-bottom:76px}
+.compact-viewport .modal-card header h2{font-size:24px}
+.compact-viewport .modal-card footer,.compact-viewport .game-over-actions{position:sticky;bottom:-12px;background:#fff9ef;padding:8px 0;z-index:6;flex-wrap:wrap;gap:8px}
+.compact-viewport .modal-card footer button{min-height:44px;padding:6px 10px;min-width:0}
+.compact-viewport .order-board-items{grid-template-columns:1fr}
+.compact-viewport .shop-section{height:auto;max-height:none;overflow:visible}
+.compact-viewport #design-modal .design-card{width:min(960px,100%);height:100%;max-height:500px;display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr);grid-template-rows:32px minmax(0,1fr) 44px;gap:6px 10px;padding:8px;overflow:hidden;scroll-padding:0;border-radius:12px}
+.compact-viewport #design-modal header{grid-column:1;grid-row:1;display:flex;align-items:center;min-width:0;overflow:hidden}
+.compact-viewport #design-modal header h2{font-size:18px;line-height:1.1;margin:0;text-shadow:none;white-space:nowrap}
+.compact-viewport #design-modal header p,.compact-viewport #design-modal .customer-strip-wrap>h3,.compact-viewport #design-modal .style-help,.compact-viewport #design-modal .option-tray h3,.compact-viewport #design-modal .personal-preferences,.compact-viewport #design-modal .match-preview>strong,.compact-viewport #design-modal .category-icon{display:none}
+.compact-viewport #design-modal .customer-strip-wrap{grid-column:2;grid-row:1;position:static;width:auto;min-width:0;margin:0;overflow:hidden}
+.compact-viewport #design-modal .customer-strip{height:32px;padding:0;overflow:visible}
+.compact-viewport #design-modal .customer-card{display:flex;align-items:center;flex-wrap:nowrap;gap:6px;position:static;height:32px;min-height:0;padding:3px 6px;width:100%;margin:0;transform:none;box-shadow:none;border:0;border-radius:6px}
+.compact-viewport #design-modal .customer-card:after{display:none}
+.compact-viewport #design-modal .customer-avatar{position:static;width:24px;height:24px;flex:none}
+.compact-viewport #design-modal .customer-card>strong,.compact-viewport #design-modal .customer-card .customer-style{font-size:14px;line-height:1.2;margin:0}
+.compact-viewport #design-modal .customer-card .customer-style{min-width:0;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.compact-viewport #design-modal .design-layout{grid-column:1/-1;grid-row:2;display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr);height:auto;min-height:0;overflow:hidden;gap:10px;margin:0}
+.compact-viewport #design-modal .preview-column{display:flex;flex-direction:column;position:relative;min-height:0;overflow:hidden;padding:0}
+.compact-viewport #design-modal .fashion-stage,.compact-viewport #design-modal[class*="reveal-"] .fashion-stage{flex:1;position:relative;height:auto;min-height:0;overflow:hidden;border-radius:8px}
+.compact-viewport #design-modal .fashion-stage:before,.compact-viewport #design-modal .fashion-stage:after{display:none}
+.compact-viewport #design-modal .fashion-stage #fashion-preview{display:block;width:100%;height:100%;min-height:0;object-fit:contain;filter:none;animation:none;transform:none}
+.compact-viewport #design-modal .match-preview{position:static;width:auto;flex:none;min-height:0;padding:2px 0;margin:0;font-size:14px;line-height:16px;pointer-events:auto}
+.compact-viewport #design-modal .match-preview>div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.compact-viewport #design-modal .design-options{position:relative;display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;gap:4px}
+.compact-viewport #design-modal .design-tabs{display:grid;flex:none;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:44px 44px;gap:4px;padding:0}
+.compact-viewport #design-modal .design-tabs button{height:44px;min-height:44px;padding:3px;font-size:14px;line-height:1.15;flex-wrap:nowrap}
+.compact-viewport #design-modal .option-tray{flex:1;min-height:0;overflow:hidden;padding:0}
+.compact-viewport #design-modal .option-grid{display:flex;align-items:stretch;gap:4px;margin:0}
+.compact-viewport #design-modal .option-grid button{flex:1;min-width:0;min-height:72px;height:72px;padding:2px;gap:0;font-size:14px;line-height:14px;overflow-wrap:anywhere;border-radius:6px}
+.compact-viewport #design-modal .option-grid button svg,.compact-viewport #design-modal .option-grid .fabric-swatch{flex:none;width:24px;height:22px;min-height:0;margin:0}
+.compact-viewport #design-modal .option-grid .fabric-swatch{width:28px;border-radius:4px}
+.compact-viewport #design-modal .option-grid button .owned-count{font-size:14px;line-height:14px;margin:0}
+.compact-viewport #design-modal footer{grid-column:1/-1;grid-row:3;display:flex;align-items:center;flex-wrap:nowrap;position:static;min-width:0;min-height:44px;height:44px;padding:0;margin:0;gap:8px;border:0;background:transparent}
+.compact-viewport #design-modal footer .hidden,.compact-viewport #design-modal .practice-modal-skip{display:none!important}
+.compact-viewport #design-modal footer button{flex:none;min-width:44px;min-height:44px;height:44px;padding:4px 10px;font-size:14px;margin:0}
+.compact-viewport #design-modal footer #cancel-design{order:0;margin-right:auto}
+.compact-viewport #design-modal footer .primary{order:2;width:auto;min-width:80px;font-size:16px}
+.compact-viewport #compact-supply-status{display:block;order:1;flex:1;min-width:0}
+.compact-viewport #design-modal #design-supply-status{display:none;margin:0!important;font-size:14px!important;line-height:14px}
+.compact-viewport #design-modal #design-supply-status[data-missing="true"]{display:block}
+.compact-viewport #design-modal .craft-challenge{order:1;flex:1;position:static;min-width:0;height:44px;margin:0;padding:0;font-size:14px;line-height:16px}
+.compact-viewport #design-modal .craft-challenge small{display:none}
+.compact-viewport #craft-status{display:block;font-size:14px;line-height:16px;white-space:nowrap}
+.compact-viewport #design-modal .craft-track{height:18px;margin:4px 0 0}
+.compact-viewport #craft-marker{top:-4px;height:24px}
+.compact-viewport .craft-perfect:after{line-height:14px}
+.compact-viewport #design-modal:has(.craft-challenge:not(.hidden)) #compact-supply-status{display:none}
+.compact-viewport #design-modal[class*="reveal-"] .design-tabs,.compact-viewport #design-modal[class*="reveal-"] .option-tray{display:none}
+.compact-viewport #design-modal #compact-reveal{display:none;min-height:0;flex:1}
+.compact-viewport #design-modal[class*="reveal-"] #compact-reveal{display:block}
+.compact-viewport #design-modal #studio-reveal{position:static;display:flex;align-items:flex-start;justify-content:center;gap:2px;max-width:none;width:100%;height:100%;padding:4px;overflow:hidden;pointer-events:none}
+.compact-viewport #design-modal #studio-reveal:empty{display:none}
+.compact-viewport #design-modal #studio-reveal>*{position:static;font-size:14px!important;line-height:16px;max-width:100%;margin:0;padding:0;border:0;box-shadow:none;transform:none;animation:none!important}
+.compact-viewport #design-modal #studio-reveal .studio-particle,.compact-viewport #design-modal #studio-reveal .legendary-ring{display:none}
+@media(orientation:portrait){
+  .compact-viewport #design-modal .design-card{grid-template-columns:minmax(0,1fr);grid-template-rows:24px 32px minmax(0,1fr) 44px;max-height:760px}
+  .compact-viewport #design-modal .customer-strip-wrap{grid-column:1;grid-row:2}
+  .compact-viewport #design-modal .design-layout{grid-row:3;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) 168px;gap:6px}
+  .compact-viewport #design-modal footer{grid-row:4}
+  .compact-viewport .touch-actions{grid-template-columns:76px 52px 52px;gap:4px}
+  .compact-viewport #joystick{width:96px;height:96px}
+}

@@ -18,6 +18,13 @@ const gameTasks = new Map();
 let nextTaskId = 0;
 const touchInput = { x:0, y:0, pointerId:null };
 const touchDevice = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+const gameViewport = readGameViewport();
+let compactMode = false;
+const compactPanelHomes = new Map();
+function readGameViewport() {
+  const viewport=window.visualViewport;
+  return {width:Math.max(1,Math.round(viewport?.width||innerWidth)),height:Math.max(1,Math.round(viewport?.height||innerHeight)),left:viewport?.offsetLeft||0,top:viewport?.offsetTop||0};
+}
 function updateInputHints() {
   document.body.classList.toggle('touch-device',touchDevice);
   document.querySelector('.title-controls').innerHTML=touchDevice
@@ -414,21 +421,21 @@ function acceptOrder(offer) {
 const canvas = document.querySelector('#game-canvas');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, touchDevice ? 1 : 1.5));
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(gameViewport.width, gameViewport.height);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.16;
 const labelRenderer = new CSS2DRenderer();
-labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.setSize(gameViewport.width, gameViewport.height);
 labelRenderer.domElement.className = 'world-label-layer';
 labelRenderer.domElement.style.pointerEvents = 'none';
 document.body.appendChild(labelRenderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(C.sky);
 scene.fog = new THREE.Fog(0xBDE8FF, 42, 78);
-const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 120);
+const camera = new THREE.PerspectiveCamera(42, gameViewport.width / gameViewport.height, 0.1, 120);
 camera.position.copy(TITLE_CAMERA);
 const clock = new THREE.Clock();
 const cameraTarget = new THREE.Vector3(0, 1, 0);
@@ -1098,12 +1105,63 @@ function updatePracticeGuide() {
   }
   document.querySelector('#practice-instruction').textContent=instruction;
 }
+// Relocate the existing panels rather than maintaining a second brief or map.
+function syncCompactLayout() {
+  const nextCompactMode=Math.min(gameViewport.width,gameViewport.height)<=600;
+  if(nextCompactMode===compactMode&&compactPanelHomes.size)return;
+  compactMode=nextCompactMode;
+  document.body.classList.toggle('compact-viewport',compactMode);
+  const panels=[['.stats-panel','#details-stats'],['#score-card','#details-stats'],['#target-card','#details-brief'],['#town-map','#details-map'],['#practice-guide','#details-practice'],['#sound-button','#details-actions'],['#orders-button','#details-actions'],['#guide-button','#details-actions'],['#pause-button','#phone-pause'],['.timer-stack','#phone-timers'],['#direction-card','#phone-navigation'],['#studio-reveal','#compact-reveal'],['#design-supply-status','#compact-supply-status']];
+  for(const [selector,host] of panels){
+    const element=document.querySelector(selector);
+    if(!compactPanelHomes.has(element)){
+      const anchor=document.createComment(`Home for ${selector}`);element.before(anchor);compactPanelHomes.set(element,anchor);
+    }
+    if(compactMode)document.querySelector(host).append(element);
+    else compactPanelHomes.get(element).after(element);
+  }
+  if(!compactMode&&gameState.modalOpen==='details')closeModal('details');
+  // Navigation precedes the contextual/practice instruction in the compact strip.
+  document.querySelector('#phone-navigation').append(document.querySelector('#phone-hint'));
+  updateTimerDisplay();updateOrderTimerDisplay();updateCompactHUD();
+}
+function syncGameViewport() {
+  const next=readGameViewport();
+  const root=document.documentElement.style;
+  if(root.getPropertyValue('--game-width')&&Object.entries(next).every(([key,value])=>gameViewport[key]===value))return;
+  Object.assign(gameViewport,next);
+  for(const [key,value] of Object.entries(gameViewport))root.setProperty(`--game-${key}`,`${value}px`);
+  camera.aspect=gameViewport.width/gameViewport.height;camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,touchDevice?1:1.5));
+  renderer.setSize(gameViewport.width,gameViewport.height);
+  labelRenderer.setSize(gameViewport.width,gameViewport.height);
+  syncCompactLayout();clearInput();lastMapUpdate=-Infinity;
+}
+function updateCompactHUD() {
+  if(!compactMode)return;
+  document.querySelector('#phone-coins').textContent=document.querySelector('#coins-value').textContent;
+  document.querySelector('#phone-capacity').textContent=document.querySelector('#capacity-value').textContent;
+  document.querySelector('#phone-score').textContent=document.querySelector('#score-value').textContent;
+  for(const [selector,label]of [['#phone-coins','Coins'],['#phone-capacity','Bag capacity'],['#phone-score','Score']]){
+    const counter=document.querySelector(selector);counter.parentElement.setAttribute('aria-label',`${label}: ${counter.textContent}`);
+  }
+  document.querySelector('#details-no-order').hidden=Boolean(gameState.activeOrder);
+  let hint='DETAILS · brief, map & help';
+  const action=touchDevice?'INTERACT':'E';
+  if(gameState.practice){
+    hint=!gameState.activeOrder?`1 · Meet your customer · ${action}`:gameState.practiceFinishing?'Delivered! Your scored run starts next.':gameState.hasFinishedDesign&&!gameState.designRejected?`4 · Return to your customer · ${action}`:missingTargetComponent()?`2 · Collect garment, dye, motif & trim · ${readyCategoryCount()}/4`:'3 · Visit a counter · design, stitch & take your look';
+  }
+  const prompt=document.querySelector('#interaction-prompt');
+  if(prompt.classList.contains('visible'))hint=`${action} · ${prompt.querySelector('span').textContent}`;
+  document.querySelector('#phone-hint').textContent=hint;
+}
 function updateControlVisibility() {
   const playing=gameState.started&&!gameState.gameOver&&!gameState.modalOpen&&!manualPaused;
   document.querySelector('#touch-controls').classList.toggle('hidden',!touchDevice||!playing);
   document.querySelector('#practice-guide').classList.toggle('hidden',!gameState.practice||!gameState.started);
   document.body.classList.toggle('touch-device',touchDevice);
   document.body.classList.toggle('practicing',gameState.practice&&gameState.started);
+  document.body.classList.toggle('inspecting',Boolean(gameState.modalOpen)||manualPaused);
 }
 function updateDirection() {
   const card=document.querySelector('#direction-card');
@@ -1128,6 +1186,8 @@ function bindReleaseControls() {
   document.querySelector('#pause-button').addEventListener('click',()=>setManualPause(true));
   document.querySelector('#resume-button').addEventListener('click',()=>setManualPause(false));
   document.querySelector('#pause-title-button').addEventListener('click',returnToTitle);
+  document.querySelector('#phone-details-button').addEventListener('click',()=>openModal('details'));
+  document.querySelector('#close-details').addEventListener('click',()=>closeModal('details'));
   for(const footer of document.querySelectorAll('.modal-card footer,.pause-panel')){
     const skip=document.createElement('button');skip.className='secondary practice-modal-skip';skip.textContent='SKIP PRACTICE';skip.addEventListener('click',finishPractice);footer.prepend(skip);
   }
@@ -1317,17 +1377,22 @@ function updateTownMapAndLabels(now) {
   customers.forEach(customer=>{candidates.push({label:customer.bubble.label,priority:customer.id===gameState.activeOrder?.customerId?7:3});if(customer.speechLabel)candidates.push({label:customer.speechLabel,priority:9});});
   const occupied=[];
   const mapRect=document.querySelector('#town-map').getBoundingClientRect();
-  const hudRects=[...document.querySelectorAll('.hud-zone,#interaction-prompt.visible,#practice-guide:not(.hidden),#bag-full-warning.visible')].map(element=>element.getBoundingClientRect());
+  const hudRects=[...document.querySelectorAll('.hud-zone,#phone-hud,#phone-timers,#interaction-prompt.visible,#practice-guide:not(.hidden),#bag-full-warning.visible,#joystick,.touch-actions')].filter(element=>element.getClientRects().length&&getComputedStyle(element).visibility!=='hidden').map(element=>element.getBoundingClientRect());
+  if(compactMode){
+    const centre=player.position.clone().setY(player.position.y+1).project(camera);
+    const x=gameViewport.left+(centre.x+1)*gameViewport.width/2,y=gameViewport.top+(1-centre.y)*gameViewport.height/2;
+    hudRects.push({left:x-48,right:x+48,top:y-38,bottom:y+48});
+  }
   const overlaps=(a,b)=>a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
   candidates.sort((a,b)=>b.priority-a.priority||horizontalDistance(player.position,a.label.getWorldPosition(new THREE.Vector3()))-horizontalDistance(player.position,b.label.getWorldPosition(new THREE.Vector3())));
   for(const {label,priority} of candidates) {
     const world=label.getWorldPosition(new THREE.Vector3()),distance=horizontalDistance(player.position,world),screen=world.clone().project(camera);
     const width=label.element.offsetWidth||label.element.textContent.length*7+24,height=label.element.offsetHeight||32;
-    const x=(screen.x+1)*innerWidth/2,y=(1-screen.y)*innerHeight/2;
+    const x=gameViewport.left+(screen.x+1)*gameViewport.width/2,y=gameViewport.top+(1-screen.y)*gameViewport.height/2;
     const rect={left:x-width/2-4,right:x+width/2+4,top:y-height-4,bottom:y+4};
     const enabled=(!label.element.classList.contains('customer-bubble')&&!label.element.classList.contains('pickup-label'))||label.element.classList.contains('visible');
-    const eligible=enabled&&gameState.started&&!gameState.modalOpen&&!gameState.gameOver&&(priority>=6||distance<4)&&screen.z>-1&&screen.z<1&&rect.right>0&&rect.left<innerWidth&&rect.bottom>0&&rect.top<innerHeight;
-    const visible=eligible&&occupied.length<4&&!occupied.some(other=>overlaps(rect,other))&&!hudRects.some(other=>overlaps(rect,other))&&!overlaps(rect,mapRect);
+    const eligible=enabled&&gameState.started&&!gameState.modalOpen&&!gameState.gameOver&&(priority>=6||distance<4)&&screen.z>-1&&screen.z<1&&rect.right>gameViewport.left&&rect.left<gameViewport.left+gameViewport.width&&rect.bottom>gameViewport.top&&rect.top<gameViewport.top+gameViewport.height;
+    const visible=eligible&&occupied.length<(compactMode?2:4)&&!occupied.some(other=>overlaps(rect,other))&&!hudRects.some(other=>overlaps(rect,other))&&!(document.querySelector('#town-map').closest('#hud')&&overlaps(rect,mapRect));
     label.element.style.visibility=visible?'visible':'hidden';
     if(visible&&label.element.getBoundingClientRect().width>0)occupied.push(rect);
   }
@@ -2239,6 +2304,7 @@ function syncDesignOptions() {
   }
   const missing=MATERIAL_CATEGORIES.filter(category=>!currentDraft()[CATEGORY_RECIPE_KEY[category]]);
   document.querySelector('#design-supply-status').textContent=missing.length?`NEED ${missing.map(c=>CATEGORY_LABELS[c]).join(' · ')}`:original?'Keep components free; only replacements use supplies.':'Use one owned garment, dye, motif and trim.';
+  document.querySelector('#design-supply-status').dataset.missing=String(missing.length>0);
   document.querySelector('#create-design').disabled=!canCommitDraft();updateFashionPreview();
   const draft=currentDraft();
   document.querySelectorAll('[data-design-tab]').forEach(button=>{const key={garment:'garmentType',colour:'colour',motif:'motif',trim:'trim',cut:'cutVariant',accent:'accentColour'}[button.dataset.designTab];button.classList.toggle('chosen',Boolean(draft[key]));});
@@ -2811,7 +2877,7 @@ function openOrderBoard(){
   if(!gameState.started||gameState.gameOver||gameState.activeOrder||gameState.modalOpen||saleGameplayPaused())return;
   renderOrderBoard();openModal('orders');
 }
-function choicesPauseClocks(){return ['design','orders','bag','shop','results'].includes(gameState.modalOpen);}
+function choicesPauseClocks(){return ['design','orders','bag','shop','results','details'].includes(gameState.modalOpen);}
 function renderShopOrders(){
   const container=document.querySelector('#shop-order-items');if(gameState.activeOrder){const customer=targetCustomer(),order=gameState.activeOrder;container.innerHTML=`<article class="shop-order-card active-order"><small>ACTIVE ORDER · ${order.difficulty} · SCORE ×${order.difficultyMultiplier}</small>${customerPortraitMarkup(customer)}<strong>${customer.name}</strong>${briefMarkup(customer.id)}<b>→ ${DISTRICTS.find(item=>item.id===order.destinationId).name}</b><span>${order.deadlineSeconds}s deadline</span></article>`;}else container.innerHTML=orderCardsMarkup();
 }
@@ -3051,8 +3117,9 @@ function formatTime(seconds) {
 function updateTimerDisplay() {
   const card=document.querySelector('#timer-card'), status=document.querySelector('#timer-status'), value=document.querySelector('#timer-value');
   const designing=choicesPauseClocks(), displayTime=hudCountup?.display.time??gameState.timeRemaining; status.textContent=designing?'CHOICES · CLOCK PAUSED':''; value.textContent=formatTime(displayTime);
-  if(gameState.practice){status.textContent='PRACTICE';value.textContent='UNTIMED';}
+  if(gameState.practice){status.textContent='PRACTICE';value.textContent=compactMode?'∞':'UNTIMED';}
   else if(!designing)status.textContent='RUN TIME';
+  card.setAttribute('aria-label',gameState.practice?'Practice · no time limit':`Run time ${value.textContent}`);
   card.classList.toggle('warning',gameState.timeRemaining<=30&&gameState.timeRemaining>15); card.classList.toggle('urgent',gameState.timeRemaining<=15&&gameState.timeRemaining>5); card.classList.toggle('critical',gameState.timeRemaining<=5);
   const second=Math.ceil(gameState.timeRemaining); if(!gameState.practice&&!choicesPauseClocks()&&!saleGameplayPaused()&&gameState.started&&gameState.timeRemaining<=15&&second!==lastUrgentSecond){card.classList.remove('tick');void card.offsetWidth;card.classList.add('tick');lastUrgentSecond=second;if(second===15||second%5===0)playSound('urgent');}
 }
@@ -3105,7 +3172,7 @@ function objectiveText() {
 }
 function updateCollectionHUD() {
   const components=document.querySelector('#target-components');
-  const collecting=Boolean(gameState.started&&!gameState.gameOver&&gameState.activeOrder&&!gameState.hasFinishedDesign&&!gameState.modalOpen);
+  const collecting=Boolean(gameState.started&&!gameState.gameOver&&gameState.activeOrder&&!gameState.hasFinishedDesign&&(!gameState.modalOpen||gameState.modalOpen==='details'));
   components.hidden=!collecting;
   if(!collecting)return;
   components.innerHTML=MATERIAL_CATEGORIES.map(category=>{
@@ -3132,6 +3199,7 @@ function updateHUD() {
   const upgrades=upgradeState();document.querySelector('#upgrade-progress').textContent=upgrades.affordable?'UPGRADE READY!':upgrades.next?`NEXT UPGRADE ${gameState.coins} / ${upgrades.next.cost}`:'UPGRADES COMPLETE';document.querySelector('#coin-stat').classList.toggle('upgrade-ready',upgrades.affordable);
   updateTimerDisplay(); updateOrderTimerDisplay(); updateScoreDisplay();
   updatePracticeGuide();
+  updateCompactHUD();
   const objective = objectiveText();
   if (objective !== lastObjective) {
     const card = document.querySelector('#objective-card');
@@ -3196,7 +3264,8 @@ function updateOrderTimerDisplay(){
   const card=document.querySelector('#order-timer-card'),value=document.querySelector('#order-timer-value'),order=gameState.activeOrder;
   card.classList.toggle('hidden',!order);
   if(!order)return;
-  value.textContent=gameState.practice?'PRACTICE':order.orderLate?'LATE · STILL SELL':formatTime(orderTimeRemaining(order));
+  value.textContent=gameState.practice?'PRACTICE':order.orderLate?(compactMode?'LATE · SELL':'LATE · STILL SELL'):formatTime(orderTimeRemaining(order));
+  card.setAttribute('aria-label',gameState.practice?'Practice delivery · no time limit':order.orderLate?'Delivery late · you can still sell':`Delivery deadline ${value.textContent}`);
   card.title='Late accepted deliveries: half sale coins, lower score, −5 seconds and combo reset.';
   card.classList.toggle('late',order.orderLate);
   card.classList.toggle('warning',!order.orderLate&&orderTimeRemaining(order)<=10);
@@ -3210,9 +3279,11 @@ function updateObjectiveMarker() {
 }
 function setPrompt(label, perfect = false) {
   const prompt = document.querySelector('#interaction-prompt');
+  const changed=prompt.querySelector('span').textContent!==(label||'')||prompt.classList.contains('visible')!==Boolean(label);
   prompt.querySelector('span').textContent = label || '';
   prompt.classList.toggle('visible', Boolean(label));
   prompt.classList.toggle('perfect', Boolean(label) && perfect);
+  if(changed)updateCompactHUD();
 }
 function pulse(id) {
   const el = document.getElementById(id);
@@ -3229,7 +3300,10 @@ function openModal(name) {
   if (name === 'orders') renderOrderBoard();
   if (name === 'design') musicController.setState('designing', .25);
   setPrompt(null); updateHUD();syncPlatformGameplay();updateControlVisibility();
-  document.querySelector(`#${name}-modal button:not(:disabled)`)?.focus();
+  if(name==='details'){
+    document.querySelector('#details-modal .modal-card').scrollTop=0;
+    document.querySelector('#details-heading').focus({preventScroll:true});
+  }else document.querySelector(`#${name}-modal button:not(:disabled)`)?.focus();
 }
 function closeModal(name) {
   if(gameState.modalOpen!==name||name==='results')return;
@@ -3241,6 +3315,7 @@ function closeModal(name) {
   if (name === 'design' && gameState.started && !gameState.gameOver) musicController.setState('gameplay', .25);
   const leavingShop=name==='shop'&&gameState.shopObjective;if(leavingShop){gameState.shopObjective=false;if(!gameState.activeOrder&&!gameState.gameOver)generateOrderOffers();}
   updateHUD();
+  if(name==='details'&&compactMode)document.querySelector('#phone-details-button').focus({preventScroll:true});
 }
 
 // 20. particles/popups
@@ -3442,8 +3517,8 @@ function bindUI() {
   document.querySelector('#sound-button').addEventListener('click', () => { gameState.soundEnabled=!gameState.soundEnabled;saveSettings();syncAudio(); });
   document.querySelector('#close-shop').addEventListener('click', () => closeModal('shop'));
   document.querySelector('#shop-tabs').addEventListener('click',event=>{const button=event.target.closest('[data-shop-tab]');if(button){gameState.shopTab=button.dataset.shopTab;renderShop();}});
-  document.querySelector('#orders-button').addEventListener('click',openOrderBoard);
-  document.querySelector('#guide-button').addEventListener('click',activateGuide);document.querySelector('#next-job').addEventListener('click',()=>continueSale());document.querySelector('#visit-shop').addEventListener('click',()=>continueSale(true));
+  document.querySelector('#orders-button').addEventListener('click',()=>{if(gameState.modalOpen==='details')closeModal('details');openOrderBoard();});
+  document.querySelector('#guide-button').addEventListener('click',()=>{if(gameState.modalOpen==='details')closeModal('details');activateGuide();});document.querySelector('#next-job').addEventListener('click',()=>continueSale());document.querySelector('#visit-shop').addEventListener('click',()=>continueSale(true));
   document.querySelector('#close-orders').addEventListener('click',()=>closeModal('orders'));
   document.querySelector('#order-board-items').addEventListener('click',event=>{const button=event.target.closest('[data-accept-order]');if(button)acceptOrder(offerForCustomer(button.dataset.acceptOrder));});
   document.querySelector('#stop-craft').addEventListener('click',stopCraftChallenge);
@@ -3469,14 +3544,10 @@ function bindUI() {
   document.querySelector('#upgrade-cards').addEventListener('click', e => { const b = e.target.closest('[data-upgrade]'); if (b) buyUpgrade(b.dataset.upgrade); });
   document.querySelectorAll('.modal-backdrop').forEach(b => b.addEventListener('click', () => { if (gameState.modalOpen) closeModal(gameState.modalOpen); }));
   bindReleaseControls();
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, touchDevice ? 1 : 1.5));
-    labelRenderer.setSize(window.innerWidth, window.innerHeight);
-    clearInput();
-  });
+  syncGameViewport();
+  window.addEventListener('resize',syncGameViewport);
+  window.visualViewport?.addEventListener('resize',syncGameViewport);
+  window.visualViewport?.addEventListener('scroll',syncGameViewport);
 }
 async function init() {
   const status=document.querySelector('#loading-status');
