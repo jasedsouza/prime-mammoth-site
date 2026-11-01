@@ -83,7 +83,7 @@
       <div class="phone-status">
         <div class="phone-counters">
           <span aria-label="Coins"><svg aria-hidden="true"><use href="#icon-coin"/></svg><b id="phone-coins">0</b></span>
-          <span aria-label="Bag capacity"><svg aria-hidden="true"><use href="#icon-bag"/></svg><b id="phone-capacity">0/6</b></span>
+          <span aria-label="Bag capacity"><svg aria-hidden="true"><use href="#icon-bag"/></svg><b id="phone-capacity">0/12</b></span>
           <span aria-label="Score"><svg aria-hidden="true"><use href="#icon-star"/></svg><b id="phone-score">0</b></span>
         </div>
         <button id="phone-details-button" class="hud-button" aria-label="Open game details" aria-haspopup="dialog">DETAILS</button>
@@ -100,13 +100,13 @@
       </div>
       <div class="stat materials-stat hud-panel" id="materials-stat">
         <svg aria-hidden="true"><use href="#icon-bag"/></svg>
-        <span><small>MATERIALS <b id="capacity-value">0/6</b></small><strong id="materials-value">GARMENT ×0 · DYE ×0 · PATCH ×0 · TRIM ×0</strong></span>
+        <span><small>MATERIALS <b id="capacity-value">0/12</b></small><strong id="materials-value">CLOTHES ×0 · COLOUR ×0 · STICKER ×0 · DECORATION ×0</strong></span>
       </div>
       </div>
-      <div id="target-card" class="hud-panel target-card hidden"><small id="collection-heading">BUILD YOUR LOOK</small><strong id="target-name"></strong><span id="target-look"></span><div id="target-components" class="target-components" role="group" aria-label="Materials to collect: choose one of each" hidden></div><span id="target-style" class="customer-style"></span></div>
+      <div id="target-card" class="hud-panel target-card hidden"><div id="target-name"></div><span id="target-look"></span></div>
     </div>
+    <aside id="collection-hud" class="hud-panel" aria-label="Collect one material from each category" hidden><header><span>YOUR OUTFIT</span><strong id="collection-count">0/4 READY</strong></header><div id="target-components" class="target-components" role="group"></div></aside>
     <div class="hud-zone hud-centre">
-      <div id="objective-card" class="hud-panel objective-card">CHOOSE A CUSTOMER BRIEF</div>
       <div id="direction-card" class="direction-card"><svg id="direction-arrow" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 5L43 27H31V43H17V27H5Z"/></svg><span id="direction-text"></span></div>
       <div class="timer-stack"><div id="timer-card" class="hud-panel timer-card"><span id="timer-status"></span><strong id="timer-value">01:30</strong></div>
       <div id="order-timer-card" class="hud-panel order-timer-card hidden"><span>DELIVERY DEADLINE</span><strong id="order-timer-value">00:45</strong></div></div>
@@ -114,7 +114,7 @@
     <div class="hud-zone hud-right">
       <button id="sound-button" class="hud-button" aria-label="Toggle sound"><svg><use href="#icon-sound"/></svg><span id="sound-state">ON</span></button>
       <button id="orders-button" class="hud-button" aria-label="Choose an order">ORDERS</button>
-      <button id="guide-button" class="hud-button" aria-label="Guide for ten active seconds">GUIDE · G</button><button id="pause-button" class="hud-button" aria-label="Pause game">Ⅱ</button>
+      <button id="pause-button" class="hud-button" aria-label="Pause game">Ⅱ</button>
       <div id="score-card" class="hud-panel score-card"><small>SCORE</small><strong id="score-value">0</strong><span id="combo-value"></span></div>
     </div>
     <div id="assistant-popup" class="assistant-popup">+10 ASSISTANT</div>
@@ -128,18 +128,16 @@
         <circle id="town-map-player" cx="16" cy="16" r=".9" fill="#29213D" stroke="#FFF4DF" stroke-width=".35"/>
       </svg>
       <p id="town-map-caption">Meet a customer · E to accept</p>
-      <small>G GARMENT · D DYE · M MOTIF · T TRIM<br>◆ CRAFT · ⌂ SHOP · ● YOU</small>
+      <small>👕 CLOTHES · ● COLOUR · ★ STICKER · 🎀 DECORATION<br>◆ CRAFT · ⌂ SHOP · ● YOU</small>
     </aside>
-    <div id="interaction-prompt" class="interaction-prompt"><kbd>E</kbd><span></span></div>
-    <div id="bag-full-warning" class="bag-full-warning" aria-live="polite">
-      <strong>BAG FULL</strong><span><kbd>Q</kbd> DROP LAST ITEM</span><span><kbd>B</kbd> MANAGE BAG</span>
-    </div>
+    <div id="interaction-prompt" class="interaction-prompt"><button id="context-action"><kbd>E</kbd><span></span></button></div>
+    <div id="bag-full-warning" class="bag-full-warning"><strong>BAG FULL</strong><span></span><button id="open-full-bag">OPEN BAG</button></div>
   </main>
 
   <aside id="practice-guide" class="practice-guide hidden" aria-live="polite"><strong>PRACTICE · NO TIME LIMIT</strong><p id="practice-instruction"></p><button id="skip-practice" class="secondary">SKIP · START RUN</button></aside>
   <div id="touch-controls" class="touch-controls hidden" aria-label="Touch game controls">
     <div id="joystick" role="group" aria-label="Movement joystick"><span id="joystick-thumb"></span><small>MOVE</small></div>
-    <div class="touch-actions"><button id="touch-interact" aria-label="Interact">INTERACT</button><button id="touch-jump" aria-label="Jump">JUMP</button><button id="touch-drop" aria-label="Drop last item">DROP</button><button id="touch-guide" aria-label="Guide for ten active seconds">GUIDE</button><button id="touch-bag" aria-label="Open bag">BAG</button></div>
+    <div class="touch-actions"><button id="touch-interact" aria-label="Interact">INTERACT</button><button id="touch-jump" aria-label="Jump">JUMP</button><button id="touch-drop" aria-label="Drop last item">DROP</button><button id="touch-bag" aria-label="Open bag">BAG</button></div>
   </div>
   <div id="pause-screen" class="screen" role="dialog" aria-modal="true" aria-labelledby="pause-heading"><section class="pause-panel"><h2 id="pause-heading">PAUSED</h2><p>Your run and delivery clocks are stopped.</p><button id="resume-button" class="primary">RESUME</button><button id="pause-title-button" class="secondary">BACK TO TITLE</button><a class="studio-return" href="../../">← PRIME MAMMOTH</a></section></div>
 
@@ -169,8 +167,8 @@
   <div id="design-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="design-heading">
     <div class="modal-backdrop"></div>
     <section class="modal-card design-card">
-      <header><p class="eyebrow">DESIGN STUDIO</p><h2 id="design-heading">CREATE YOUR LOOK</h2><p>Style it, then time your stitch.</p></header>
-      <div class="customer-strip-wrap"><h3>CUSTOMER ORDER</h3><div id="customer-cards" class="customer-strip"></div></div>
+      <header><p class="eyebrow">DESIGN STUDIO</p><h2 id="design-heading">CREATE YOUR LOOK</h2><p>Pick what you like. MAKE IT, stitch, then TAKE LOOK.</p></header>
+      <div class="customer-strip-wrap"><div id="customer-cards" class="customer-strip"></div></div>
       <div class="design-layout">
         <div class="preview-column">
           <div class="preview-stage fashion-stage">
@@ -181,14 +179,9 @@
               <g id="garment-layer"></g>
             </svg>
           </div>
-          <div id="match-preview" class="match-preview"></div>
-          <div id="style-roll" class="style-roll" aria-live="polite">
-            <strong id="style-roll-status">STYLE ROLL</strong>
-            <div><span>CUT <b id="roll-cut">—</b></span><span>ACCENT <b id="roll-accent">—</b></span><span>RARITY <b id="roll-rarity">—</b></span></div>
-            <p id="design-result"></p>
-          </div>
+
         </div>
-        <div class="design-options"><strong id="designer-style-brief" hidden></strong><nav class="design-tabs" role="tablist" aria-label="Design categories"><button role="tab" id="design-tab-garment" aria-controls="design-panel-garment" aria-selected="true" data-design-tab="garment"><i class="category-icon">G</i>GARMENT</button><button role="tab" id="design-tab-colour" aria-controls="design-panel-colour" aria-selected="false" data-design-tab="colour"><i class="category-icon">D</i>COLOUR</button><button role="tab" id="design-tab-motif" aria-controls="design-panel-motif" aria-selected="false" data-design-tab="motif"><i class="category-icon">M</i>MOTIF</button><button role="tab" id="design-tab-trim" aria-controls="design-panel-trim" aria-selected="false" data-design-tab="trim"><i class="category-icon">T</i>TRIM</button><button role="tab" id="design-tab-cut" aria-controls="design-panel-cut" aria-selected="false" data-design-tab="cut">CUT</button><button role="tab" id="design-tab-accent" aria-controls="design-panel-accent" aria-selected="false" data-design-tab="accent">ACCENT</button></nav><div class="option-tray"><section data-design-panel="garment" role="tabpanel" id="design-panel-garment" aria-labelledby="design-tab-garment"><h3>GARMENT</h3><div id="garment-options" class="option-grid garments">
+        <div class="design-options"><nav class="design-tabs" role="tablist" aria-label="Design categories"><button role="tab" id="design-tab-garment" aria-controls="design-panel-garment" aria-selected="true" data-design-tab="garment">CLOTHES</button><button role="tab" id="design-tab-colour" aria-controls="design-panel-colour" aria-selected="false" data-design-tab="colour">COLOUR</button><button role="tab" id="design-tab-motif" aria-controls="design-panel-motif" aria-selected="false" data-design-tab="motif">STICKER</button><button role="tab" id="design-tab-trim" aria-controls="design-panel-trim" aria-selected="false" data-design-tab="trim">DECORATION</button><button role="tab" id="design-tab-cut" aria-controls="design-panel-cut" aria-selected="false" data-design-tab="cut">SHAPE</button><button role="tab" id="design-tab-accent" aria-controls="design-panel-accent" aria-selected="false" data-design-tab="accent">SECOND COLOUR</button><button id="more-looks" aria-expanded="false">MORE LOOKS</button></nav><div class="option-tray"><section data-design-panel="garment" role="tabpanel" id="design-panel-garment" aria-labelledby="design-tab-garment"><h3>CLOTHES</h3><div id="garment-options" class="option-grid garments">
             <button data-garment="DRESS" class="selected"><svg><use href="#icon-dress"/></svg>DRESS</button>
             <button data-garment="TOP"><svg><use href="#icon-top"/></svg>TOP</button>
             <button data-garment="SKIRT"><svg><use href="#icon-skirt"/></svg>SKIRT</button>
@@ -199,27 +192,27 @@
             <button data-colour="PEACH"><i style="--swatch:#FF9877"></i>PEACH</button>
             <button data-colour="SKY"><i style="--swatch:#70CFFF"></i>SKY</button>
           </div></section>
-<section data-design-panel="motif" role="tabpanel" id="design-panel-motif" aria-labelledby="design-tab-motif" hidden><h3>MOTIF</h3><div id="motif-options" class="option-grid patterns">
+<section data-design-panel="motif" role="tabpanel" id="design-panel-motif" aria-labelledby="design-tab-motif" hidden><h3>STICKER</h3><div id="motif-options" class="option-grid patterns">
             <button data-motif="STAR" class="selected"><svg><use href="#icon-star"/></svg>STAR</button>
             <button data-motif="HEART"><svg><use href="#icon-heart"/></svg>HEART</button>
             <button data-motif="FLOWER"><svg><use href="#icon-flower"/></svg>FLOWER</button>
           </div></section>
-<section data-design-panel="trim" role="tabpanel" id="design-panel-trim" aria-labelledby="design-tab-trim" hidden><h3>TRIM</h3><div id="trim-options" class="option-grid trims">
+<section data-design-panel="trim" role="tabpanel" id="design-panel-trim" aria-labelledby="design-tab-trim" hidden><h3>DECORATION</h3><div id="trim-options" class="option-grid trims">
             <button data-trim="BOW" class="selected"><svg><use href="#icon-bow"/></svg>BOW</button>
             <button data-trim="BELT"><svg><use href="#icon-belt"/></svg>BELT</button>
             <button data-trim="RUFFLE"><svg><use href="#icon-ruffle"/></svg>RUFFLE</button>
           </div></section>
-<section data-design-panel="cut" role="tabpanel" id="design-panel-cut" aria-labelledby="design-tab-cut" hidden><h3>CUT</h3><div id="cut-options" class="option-grid cuts">
+<section data-design-panel="cut" role="tabpanel" id="design-panel-cut" aria-labelledby="design-tab-cut" hidden><h3>SHAPE</h3><div id="cut-options" class="option-grid cuts">
             <button data-cut="CLASSIC">CLASSIC</button><button data-cut="PUFFY">PUFFY</button><button data-cut="LAYERED">LAYERED</button><button data-cut="ASYMMETRIC">ASYMMETRIC</button>
           </div></section>
-<section data-design-panel="accent" role="tabpanel" id="design-panel-accent" aria-labelledby="design-tab-accent" hidden><h3>ACCENT</h3><div id="accent-options" class="option-grid accents"></div></section></div><p class="style-help">Try it. See it. Make it yours.</p><div id="compact-reveal"></div></div>
+<section data-design-panel="accent" role="tabpanel" id="design-panel-accent" aria-labelledby="design-tab-accent" hidden><h3>SECOND COLOUR</h3><div id="accent-options" class="option-grid accents"></div></section></div><div id="compact-reveal"></div></div>
       </div>
-      <p id="design-supply-status" role="status"></p><footer><div id="compact-supply-status"></div><div id="craft-challenge" class="craft-challenge hidden"><strong id="craft-status" role="status" aria-live="polite">HIT THE GREEN CENTRE</strong><div class="craft-track"><span class="craft-good"></span><span class="craft-perfect"></span><i id="craft-marker"></i></div><small>Green centre: PERFECT · gold: GOOD · outside: MISS</small></div><button id="stop-craft" class="primary hidden">STOP</button><button id="cancel-design" class="secondary">BACK</button><button id="create-design" class="primary">MAKE IT!</button><button id="take-design" class="primary hidden">TAKE LOOK</button></footer>
+      <p id="design-supply-status" role="status"></p><footer><div id="compact-supply-status"></div><div id="craft-challenge" class="craft-challenge hidden" aria-label="Click or tap to stop the stitch marker"><strong id="craft-status" role="status" aria-live="polite">HIT THE GREEN CENTRE</strong><div class="craft-track"><span class="craft-good"></span><span class="craft-perfect"></span><i id="craft-marker"></i></div><small>Green centre: PERFECT · gold: GOOD · outside: MISS</small></div><button id="stop-craft" class="primary hidden">STOP</button><button id="cancel-design" class="secondary">BACK</button><button id="create-design" class="primary">MAKE IT!</button><button id="take-design" class="primary hidden">TAKE LOOK</button></footer>
     </section>
   </div>
 
   <div id="results-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="results-heading">
-    <section class="modal-card results-card"><h2 id="results-heading">CUSTOMER VERDICT</h2><div id="sale-results" class="sale-results"></div><footer><button id="next-job" class="primary">NEXT JOB</button><button id="visit-shop" class="secondary hidden">UPGRADE READY · VISIT SHOP</button></footer></section>
+    <section class="modal-card results-card"><h2 id="results-heading">DELIVERED!</h2><div id="sale-results" class="sale-results"></div><footer><button id="next-job" class="primary">NEXT OUTFIT</button><button id="visit-shop" class="secondary hidden">UPGRADE READY · VISIT SHOP</button></footer></section>
   </div>
   <div id="shop-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="shop-heading">
     <div class="modal-backdrop"></div>
