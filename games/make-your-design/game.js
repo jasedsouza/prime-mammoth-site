@@ -30,12 +30,14 @@ function readGameViewport() {
 function updateInputHints() {
   document.body.classList.toggle('touch-device',touchDevice);
   document.querySelector('.title-controls').innerHTML=touchDevice
-    ? '<span>JOYSTICK TO MOVE</span><span>JUMP · INTERACT · DROP · BAG</span>'
-    : '<kbd>WASD</kbd> MOVE <kbd>SPACE</kbd> JUMP <kbd>E</kbd> INTERACT <kbd>Q</kbd> DROP <kbd>B</kbd> BAG';
+    ? '<span>JOYSTICK TO MOVE</span><span>JUMP · INTERACT · DROP · BAG · GUIDE</span>'
+    : '<kbd>WASD</kbd> MOVE <kbd>SPACE</kbd> JUMP <kbd>E</kbd> ACCEPT / TAKE <kbd>Q</kbd> DROP <kbd>B</kbd> BAG <kbd>G</kbd> GUIDE';
   document.querySelector('#interaction-prompt kbd').textContent=touchDevice?'INTERACT':'E';
   document.querySelector('#stop-craft').textContent=touchDevice?'TAP TO STOP':'SPACE / CLICK';
   document.querySelector('#town-map-caption').textContent=touchDevice?'Meet a customer · tap INTERACT to accept':'Meet a customer · E to accept';
-
+  document.querySelector('#bag-full-warning').innerHTML=touchDevice
+    ? '<strong>BAG FULL</strong><span>DROP an item or open BAG. Store spares at MY SHOP.</span>'
+    : '<strong>BAG FULL</strong><span><kbd>Q</kbd> DROP · <kbd>B</kbd> BAG · store spares at MY SHOP</span>';
 }
 // Apply device instructions before loading the town, including the title screen.
 updateInputHints();
@@ -61,7 +63,7 @@ function clearInput() {
 function setSuspended(reason, value) {
   const wasSuspended=simulationSuspended();
   if(value)suspendReasons.add(reason);else suspendReasons.delete(reason);
-  if(!wasSuspended&&simulationSuspended()){suspendedAt=performance.now();clearInput();if(gameReady)setPrompt(null);}
+  if(!wasSuspended&&simulationSuspended()){suspendedAt=performance.now();clearInput();}
   if(wasSuspended&&!simulationSuspended()){suspendedDuration+=performance.now()-suspendedAt;suspendedAt=null;clock.getDelta();}
   syncAudio();
 }
@@ -149,7 +151,7 @@ const STUDIO_POINT = new THREE.Vector3(-16.3, 0, -9.7);
 const SHOP_POINT = new THREE.Vector3(15.5, 0, 9.0);
 const TITLE_CAMERA = new THREE.Vector3(17, 19, 23);
 const CAMERA_OFFSET = new THREE.Vector3(9, 11, 9);
-const BAG_CAPACITY = [0, 12, 16, 20];
+const BAG_CAPACITY = [0, 6, 8, 10];
 const BAG_COST = [0, 0, 40, 80];
 const SHOP_COST = [0, 0, 60, 120];
 const SHOP_BONUS = [0, 0, 5, 10];
@@ -157,7 +159,6 @@ const STOCKROOM_CAPACITY = 8;
 const STARTING_TIME = 90;
 const MAX_ARCADE_TIME = 180;
 const PICKUP_RADIUS = 1.6;
-const AUTO_PICKUP_RADIUS = .8;
 const RARITY_RANK = Object.freeze({ EVERYDAY:0, CUTE:1, FABULOUS:2, LEGENDARY:3 });
 const RECIPE_VALUES = Object.freeze({
   garmentType:['TOP','DRESS','SKIRT'],
@@ -222,29 +223,70 @@ const CUSTOMER_DEFINITIONS = [
   { id:'leo', name:'Leo', portrait:{skin:'#E3A06F',hair:'#8A4A2F',shirt:'#70CFFF'}, model:'assets/third_party/kenney-mini-characters/Models/GLB%20format/character-male-b.glb', height:1.59, route:[[0,-5],[0,-10],[-4,-13],[-9,-11],[-10,-7],[-6,-5]] }
 ];
 const CUSTOMER_PAUSES = [.8, 1, 1.2, 1.4, 1.1];
+const freezeTags = values => Object.freeze(Object.fromEntries(Object.entries(values).map(([key,tags])=>[key,Object.freeze(tags)])));
+const FASHION_TRAIT_RULES=Object.freeze(Object.fromEntries(Object.entries({
+  SWEET:[['HEART','BOW'],['SKIRT','PUFFY'],['FLOWER','BOW'],['HEART','PUFFY']],
+  EDGY:[['STAR','ASYMMETRIC'],['TOP','BELT'],['BELT','ASYMMETRIC'],['TOP','STAR']],
+  CHIC:[['DRESS','CLASSIC'],['BELT','CLASSIC'],['FLOWER','BELT'],['DRESS','FLOWER']],
+  PLAYFUL:[['SKIRT','RUFFLE'],['PUFFY','STAR'],['TOP','PUFFY'],['STAR','RUFFLE']],
+  ROMANTIC:[['FLOWER','RUFFLE'],['DRESS','PUFFY'],['HEART','LAYERED'],['DRESS','HEART']],
+  DRAMATIC:[['STAR','LAYERED'],['DRESS','ASYMMETRIC'],['RUFFLE','ASYMMETRIC'],['LAYERED','BELT']]
+}).map(([trait,rules])=>[trait,Object.freeze(rules.map(pair=>Object.freeze(pair)))])));
+const unorderedPairKey=(a,b)=>[a,b].sort().join('|');
+const PALETTE_MOOD_RULES=freezeTags({
+  'LAVENDER|PEACH':['DREAMY','WARM'],'LAVENDER|SKY':['DREAMY','COOL'],
+  'LAVENDER|MINT':['FRESH','COOL'],'MINT|SKY':['FRESH','COOL'],
+  'MINT|PEACH':['FRESH','WARM'],'PEACH|SKY':['DREAMY','WARM']
+});
+function deriveLookComposition(design){
+  const choices=new Set([design.garmentType,design.motif,design.trim,design.cutVariant].filter(Boolean));
+  const traitReasons=Object.fromEntries(Object.entries(FASHION_TRAIT_RULES).map(([trait,rules])=>[trait,rules.filter(pair=>pair.every(choice=>choices.has(choice))).map(pair=>[...pair])]).filter(([,rules])=>rules.length));
+  const paletteMoods=design.colour&&design.accentColour&&design.colour!==design.accentColour?[...(PALETTE_MOOD_RULES[unorderedPairKey(design.colour,design.accentColour)]||[])]:[];
+  return {fashionTraits:Object.keys(traitReasons),traitReasons,paletteMoods};
+}
+const CUSTOMER_STYLE_PROFILES=Object.freeze(Object.fromEntries(Object.entries({
+  mia:['CHIC','DREAMY'],zoe:['PLAYFUL','FRESH'],ava:['ROMANTIC','DREAMY'],noah:['CHIC','WARM'],leo:['DRAMATIC','COOL'],
+  pippa:['SWEET','WARM'],jett:['EDGY','COOL'],bea:['ROMANTIC','FRESH'],otto:['PLAYFUL','COOL'],cleo:['DRAMATIC','WARM']
+}).map(([id,[styleTag,paletteTag]])=>[id,Object.freeze({styleTag,paletteTag})])));
+const BRIEF_REWARDS=Object.freeze([0,600,1000,1300]);
+const BRIEF_RARITY_BOOST=Object.freeze([0,.02,.05,.08]);
+function calculateBriefFit(design,customerId) {
+  const profile=CUSTOMER_STYLE_PROFILES[customerId],customer=CUSTOMER_DEFINITIONS.find(c=>c.id===customerId);
+  const composition=deriveLookComposition(design),styleMatch=composition.fashionTraits.includes(profile?.styleTag),paletteMatch=composition.paletteMoods.includes(profile?.paletteTag);
+  const styleMatches=(composition.traitReasons[profile?.styleTag]||[]).map(pair=>pair.join(' + '));
+  const paletteMatches=paletteMatch?[`${design.colour} + ${design.accentColour}`]:[];
+  const touchMatches=Object.entries(customer?.preference||{}).filter(([key,value])=>design[key]===value).map(([,value])=>value);
+  return {...composition,styleMatch,paletteMatch,briefFit:(styleMatch?2:0)+(paletteMatch?1:0),personalTouches:touchMatches.length,styleMatches,paletteMatches,touchMatches};
+}
+function briefVerdict(fit){return ['NOT MY VIBE',"IT'S OKAY",'LOVE IT','NAILED IT!'][fit]||'NOT MY VIBE';}
+function customerStyleText(customerId) {
+  const profile=CUSTOMER_STYLE_PROFILES[customerId];return profile?`${profile.styleTag} · ${profile.paletteTag}`:'';
+}
+function personalTouchText(customerId){const customer=CUSTOMER_DEFINITIONS.find(c=>c.id===customerId);return Object.values(customer?.preference||{}).join(' · ');}
+function customerBrief(customerId=gameState.activeOrder?.customerId){
+  const customer=CUSTOMER_DEFINITIONS.find(item=>item.id===customerId);
+  return {name:customer?.name||'',...CUSTOMER_STYLE_PROFILES[customerId],bonuses:Object.values(customer?.preference||{})};
+}
+function briefMarkup(customerId){const brief=customerBrief(customerId);return `<span class="customer-style">STYLE: ${brief.styleTag} · COLOURS: ${brief.paletteTag}</span>${brief.bonuses.length?`<small class="personal-preferences">BONUS POINTS · ${brief.bonuses.join(' + ')} <em>optional</em></small>`:''}`;}
 const MATERIAL_CATEGORIES=Object.freeze(['garments','dyes','motifs','trims']);
-const CATEGORY_LABELS=Object.freeze({garments:'CLOTHES',dyes:'COLOUR',motifs:'STICKER',trims:'DECORATION'});
-const MATERIAL_FIELDS=Object.freeze({garments:'selectedGarmentType',dyes:'selectedColour',motifs:'selectedMotif',trims:'selectedTrim'});
-const ITEM_NAMES=Object.freeze({LAVENDER:'PURPLE',MINT:'GREEN',PEACH:'ORANGE',SKY:'BLUE',RUFFLE:'FRILL',CLASSIC:'SIMPLE',LAYERED:'LAYERS',ASYMMETRIC:'ANGLED'});
-function itemName(type){return ITEM_NAMES[type]||type||'';}
+const CATEGORY_LABELS=Object.freeze({garments:'GARMENT',dyes:'COLOUR',motifs:'MOTIF',trims:'TRIM'});
 function readyCategoryCount(){return MATERIAL_CATEGORIES.filter(category=>categoryTotal(category)>0).length;}
 function teachingCollection(){return gameState.practice||gameState.stats.sales===0;}
-function syncOutfitSelections(){
-  for(const category of MATERIAL_CATEGORIES){const field=MATERIAL_FIELDS[category];if(!gameState.inventory[category][gameState[field]])gameState[field]=Object.keys(gameState.inventory[category]).find(type=>gameState.inventory[category][type]>0)||null;}
-  if(!gameState.selectedAccent||gameState.selectedAccent===gameState.selectedColour)gameState.selectedAccent=Object.keys(SWATCHES).find(colour=>colour!==gameState.selectedColour);
-}
+function detailedMaterialGuidance(){return teachingCollection()||gameState.guideRemaining>0;}
+function activateGuide(){if(simulationSuspended()||!gameState.started||gameState.gameOver||gameState.modalOpen||saleGameplayPaused())return;gameState.guideRemaining=10;selectedPickup=null;navigationRoute=null;toast('GUIDE · 10 SECONDS');updateHUD();}
 const EXTRA_CUSTOMERS = [
-  { id:'pippa', name:'Pippa', role:'baker', base:'mia', line:'Fresh looks! Hot off the runway!', colour:C.peach },
-  { id:'jett', name:'Jett', role:'skater', base:'noah', line:'That look deserves a victory lap!', colour:C.sky },
-  { id:'bea', name:'Bea', role:'florist', base:'ava', line:'Blooming brilliant! Petal to the metal!', colour:C.mint },
-  { id:'otto', name:'Otto', role:'duck keeper', base:'leo', line:'The ducks approve. That is high praise!', colour:C.yellow },
-  { id:'cleo', name:'Cleo', role:'carnival host', base:'zoe', line:'Step right up! A spectacular look!', colour:C.coral }
+  { id:'pippa', name:'Pippa', role:'baker', base:'mia', preference:{colour:'PEACH',motif:'HEART'}, line:'Fresh looks! Hot off the runway!', colour:C.peach },
+  { id:'jett', name:'Jett', role:'skater', base:'noah', preference:{garmentType:'TOP',motif:'STAR'}, line:'That look deserves a victory lap!', colour:C.sky },
+  { id:'bea', name:'Bea', role:'florist', base:'ava', preference:{colour:'MINT',motif:'FLOWER'}, line:'Blooming brilliant! Petal to the metal!', colour:C.mint },
+  { id:'otto', name:'Otto', role:'duck keeper', base:'leo', preference:{garmentType:'TOP',motif:'HEART'}, line:'The ducks approve. That is high praise!', colour:C.yellow },
+  { id:'cleo', name:'Cleo', role:'carnival host', base:'zoe', preference:{garmentType:'SKIRT',motif:'STAR'}, line:'Step right up! A spectacular look!', colour:C.coral }
 ];
 for (const definition of EXTRA_CUSTOMERS) {
   const base = CUSTOMER_DEFINITIONS.find(customer => customer.id === definition.base);
   CUSTOMER_DEFINITIONS.push({ ...base, ...definition, portrait:{...base.portrait,shirt:`#${definition.colour.toString(16).padStart(6,'0')}`} });
 }
 CUSTOMER_DEFINITIONS.forEach((customer,index) => {
+  customer.styleProfile=CUSTOMER_STYLE_PROFILES[customer.id];
   const district = DISTRICTS[index % DISTRICTS.length];
   const next = DISTRICTS[(index+1) % DISTRICTS.length];
   const offset=index>=6 ? .9 : 0;
@@ -253,16 +295,16 @@ CUSTOMER_DEFINITIONS.forEach((customer,index) => {
 
 // 3. gameState
 const gameState = {
-  practice:false, practiceOffer:null, practiceFinishing:false, started: false, coins: 0, inventory: createEmptyInventory(), bagLevel: 1, bagCapacity: BAG_CAPACITY[1],
+  practice:false, practiceOffer:null, practiceFinishing:false, started: false, coins: 0, inventory: createEmptyInventory(), bagLevel: 1, bagCapacity: 6,
   stockroom: createEmptyInventory(), showcase: [], showcaseSequence: 0, shopTab: 'orders',
-  shopLevel: 1, hasFinishedDesign: false,
-  selectedGarmentType: null, selectedColour: null, selectedMotif: null, selectedTrim: null, selectedCut:'CLASSIC', selectedAccent:'MINT', workerOwned: false,
-  rareNextSale: false, speedBoostUntil: 0, runwayRushUntil:0, activePlayTime:0,  shopObjective:false, moved:false, modalOpen: null, soundEnabled: true,
+  shopLevel: 1, hasFinishedDesign: false, designRejected:false,
+  selectedGarmentType: 'DRESS', selectedColour: 'LAVENDER', selectedMotif: 'STAR', selectedTrim: 'BOW', selectedCut:'CLASSIC', selectedAccent:'MINT', workerOwned: false,
+  rareNextSale: false, speedBoostUntil: 0, runwayRushUntil:0, activePlayTime:0, guideRemaining:0, shopObjective:false, moved:false, modalOpen: null, soundEnabled: true,
   runSeed:0, rngState:0, orderOffers:[], activeOrder:null, previousCustomerId:null, nextOffersAt:0,
   destinationPool:[], previousDestinationId:null,
   finishedDesign: null, timeRemaining:STARTING_TIME, timerStarted:false,
   score:0, streak:0, bestCombo:0, gameOver:false,
-  stats:{ sales:0, perfectStitches:0, legendaryDesigns:0 }
+  stats:{ sales:0, perfectMatches:0, legendaryDesigns:0, customersAnnoyed:0 }
 };
 
 function createEmptyInventory() {
@@ -308,10 +350,10 @@ function hasActiveOrderMaterials() { return Boolean(gameState.activeOrder)&&hasC
 function offerForCustomer(customerId) { return gameState.orderOffers.find(offer => offer.customerId === customerId); }
 function generateOrderOffers() {
   if (!gameState.started || gameState.gameOver || gameState.activeOrder) return;
-  const eligible = customers.filter(customer => customer.id !== gameState.previousCustomerId&&!customer.resumeAt);
+  const eligible = customers.filter(customer => customer.id !== gameState.previousCustomerId&&!customer.resumeAt&&!customer.fumingUntil);
   shuffleWithRunRandom(eligible);
   if(gameState.destinationPool.length<3) gameState.destinationPool=shuffleWithRunRandom(DISTRICTS.map(item=>item.id).filter(id=>id!==gameState.previousDestinationId));
-  const routeLengths=new Map(gameState.destinationPool.map(id=>[id,estimateOrderRouteLength(id)]));
+  const routeLengths=new Map(gameState.destinationPool.map(id=>[id,estimateOrderRouteLength(null,id)]));
   const candidates=eligible.slice(0,6).flatMap(customer=>{
     return gameState.destinationPool.map(destinationId=>({customerId:customer.id,destinationId,routeLength:routeLengths.get(destinationId)}));
   }).sort((a,b)=>a.routeLength-b.routeLength);
@@ -337,15 +379,16 @@ function acceptOrder(offer) {
   const destination=DISTRICTS.find(item=>item.id===offer.destinationId);
   gameState.activeOrder = {
     customerId:offer.customerId, difficulty:offer.difficulty,
-    // Traversal and collection contribute the existing Hustle bonus.
-    difficultyMultiplier:offer.difficultyMultiplier, elapsedTravelTime:0, hustleBonus:0, rewardedMaterials:[],
+    // styleTips is the existing traversal/collection Hustle Bonus, separate from fashion Style Fit.
+    difficultyMultiplier:offer.difficultyMultiplier, elapsedTravelTime:0, styleTips:0, rewardedMaterials:[],
     estimatedTravelSeconds:offer.estimatedTravelSeconds,
-    pickupChain:0, pickupChainExpiresAt:0, orderLate:false,
-    destinationId:offer.destinationId, deadlineSeconds:offer.deadlineSeconds??estimateOrderDeadline(offer.destinationId,offer.difficulty)
+    pickupChain:0, pickupChainExpiresAt:0, orderLate:false, styleHopCount:0, lastStyleHopAt:-Infinity,
+    destinationId:offer.destinationId, deadlineSeconds:offer.deadlineSeconds??estimateOrderDeadline(null,offer.destinationId,offer.difficulty), rewardedGates:[]
   };
-  Object.assign(gameState.activeOrder,{draftDesignSeed:null,designerCategory:'garment',});
+  Object.assign(gameState.activeOrder,{draftDesignSeed:null,designerCategory:'garment',collectionProgressAt:gameState.activePlayTime,collectionPulseShown:false});
   guidance={stage:null,progress:null,at:gameNow(),reminded:new Set()};
-  syncOutfitSelections();ensureDraftSeed();gameState.shopObjective=false;
+  gameState.guideRemaining=0;gameState.shopObjective=false;
+  document.querySelectorAll('.supplier-pulse').forEach(marker=>marker.classList.remove('supplier-pulse'));
   gameState.destinationPool=gameState.destinationPool.filter(id=>id!==offer.destinationId);
   const customer=customers.find(item=>item.id===offer.customerId);
   customer.deliveryPath=walkingPath(customer.wrapper.position,destination.destination).slice(1);
@@ -998,7 +1041,7 @@ function assignPickupSlots() {
   }
   initTownMap();
 }
-function estimateOrderRouteLength(destinationId) {
+function estimateOrderRouteLength(unused,destinationId) {
   let start=[player.position.x,player.position.z];
   if(collides(...start))start=navNodes.reduce((best,node)=>horizontalDistance(start,node.point)<horizontalDistance(start,best.point)?node:best).point;
   const missing=MATERIAL_CATEGORIES.filter(category=>categoryTotal(category)===0),full=(1<<missing.length)-1;
@@ -1015,7 +1058,7 @@ function estimateOrderRouteLength(destinationId) {
   return best;
 }
 function deadlineForDifficulty(seconds,difficulty){const [factor,extra,min,max]=difficulty==='HARD'?[1.2,6,25,50]:difficulty==='MEDIUM'?[1.4,9,30,60]:[1.65,12,35,70];return THREE.MathUtils.clamp(Math.ceil(seconds*factor+extra),min,max);}
-function estimateOrderDeadline(destinationId,difficulty='EASY') { return deadlineForDifficulty(Math.ceil(estimateOrderRouteLength(destinationId)/TOP_SPEED),difficulty); }
+function estimateOrderDeadline(unused,destinationId,difficulty='EASY') { return deadlineForDifficulty(Math.ceil(estimateOrderRouteLength(null,destinationId)/TOP_SPEED),difficulty); }
 
 function supplierHint(category,type) {
   return [...new Set(COMPONENT_DEFINITIONS.filter(item=>item.category===category&&item.type===type).map(item=>item.landmark))].join(' or ');
@@ -1028,7 +1071,7 @@ function beginPractice() {
     const customer=customers.find(c=>c.id===item.customerId),previous=customers.find(c=>c.id===best?.customerId);
     return !previous||horizontalDistance(player.position,customer.wrapper.position)<horizontalDistance(player.position,previous.wrapper.position)?item:best;
   },null);
-  const destination=DISTRICTS.reduce((best,item)=>estimateOrderRouteLength(item.id)<estimateOrderRouteLength(best.id)?item:best);
+  const destination=DISTRICTS.reduce((best,item)=>estimateOrderRouteLength(null,item.id)<estimateOrderRouteLength(null,best.id)?item:best);
   gameState.practiceOffer={...offer,destinationId:destination.id};gameState.orderOffers=[gameState.practiceOffer];
   customers.forEach(refreshCustomerBubble);updateHUD();updateControlVisibility();
 }
@@ -1039,17 +1082,17 @@ function finishPractice() {
 }
 function updatePracticeGuide() {
   const guide=document.querySelector('#practice-guide');
-  guide.classList.toggle('hidden',!gameState.practice||!gameState.started||totalMaterials()>=gameState.bagCapacity);
+  guide.classList.toggle('hidden',!gameState.practice||!gameState.started);
   if(!gameState.practice)return;
   document.querySelector('#practice-instruction').textContent=currentObjective().help;
 }
-// Relocate the existing panels rather than maintaining a second mission or map.
+// Relocate the existing panels rather than maintaining a second brief or map.
 function syncCompactLayout() {
   const nextCompactMode=Math.min(gameViewport.width,gameViewport.height)<=600;
   if(nextCompactMode===compactMode&&compactPanelHomes.size)return;
   compactMode=nextCompactMode;
   document.body.classList.toggle('compact-viewport',compactMode);
-  const panels=[['.stats-panel','#details-stats'],['#score-card','#details-stats'],['#target-card','#details-brief'],['#collection-hud','#phone-hud'],['#bag-full-warning','.phone-counters'],['#town-map','#details-map'],['#practice-guide','#details-practice'],['#sound-button','#details-actions'],['#orders-button','#details-actions'],['#pause-button','#phone-pause'],['.timer-stack','#phone-timers'],['#direction-card','#phone-navigation'],['#studio-reveal','#compact-reveal'],['#design-supply-status','#compact-supply-status']];
+  const panels=[['.stats-panel','#details-stats'],['#score-card','#details-stats'],['#target-card','#details-brief'],['#collection-hud','#phone-hud'],['#town-map','#details-map'],['#practice-guide','#details-practice'],['#sound-button','#details-actions'],['#orders-button','#details-actions'],['#guide-button','#details-actions'],['#pause-button','#phone-pause'],['.timer-stack','#phone-timers'],['#direction-card','#phone-navigation'],['#studio-reveal','#compact-reveal'],['#design-supply-status','#compact-supply-status']];
   for(const [selector,host] of panels){
     const element=document.querySelector(selector);
     if(!compactPanelHomes.has(element)){
@@ -1089,7 +1132,7 @@ function updateCompactHUD() {
 function updateControlVisibility() {
   const playing=gameState.started&&!gameState.gameOver&&!gameState.modalOpen&&!manualPaused;
   document.querySelector('#touch-controls').classList.toggle('hidden',!touchDevice||!playing);
-  document.querySelector('#practice-guide').classList.toggle('hidden',!gameState.practice||!gameState.started||totalMaterials()>=gameState.bagCapacity);
+  document.querySelector('#practice-guide').classList.toggle('hidden',!gameState.practice||!gameState.started);
   document.body.classList.toggle('touch-device',touchDevice);
   document.body.classList.toggle('practicing',gameState.practice&&gameState.started);
   document.body.classList.toggle('inspecting',Boolean(gameState.modalOpen)||manualPaused);
@@ -1120,7 +1163,6 @@ function bindReleaseControls() {
   document.querySelector('#phone-details-button').addEventListener('click',()=>openModal('details'));
   document.querySelector('#close-details').addEventListener('click',()=>closeModal('details'));
   for(const footer of document.querySelectorAll('.modal-card footer,.pause-panel')){
-    if(footer.closest('#results-modal'))continue;
     const skip=document.createElement('button');skip.className='secondary practice-modal-skip';skip.textContent='SKIP PRACTICE';skip.addEventListener('click',finishPractice);footer.prepend(skip);
   }
   updateInputHints();
@@ -1138,7 +1180,7 @@ function bindReleaseControls() {
   stick.addEventListener('pointermove',move);
   const release=event=>{if(event.pointerId===touchInput.pointerId)clearInput();};
   for(const name of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(name,release);
-  for(const [id,action] of [['touch-interact',handleInteraction],['touch-jump',startJump],['touch-drop',quickDrop],['touch-bag',toggleBag]]) {
+  for(const [id,action] of [['touch-interact',handleInteraction],['touch-jump',startJump],['touch-drop',quickDrop],['touch-bag',toggleBag],['touch-guide',activateGuide]]) {
     document.querySelector(`#${id}`).addEventListener('pointerdown',event=>{event.preventDefault();if(!simulationSuspended())action();});
   }
   window.addEventListener('blur',()=>{clearInput();setSuspended('focus',true);});
@@ -1242,7 +1284,7 @@ function updateArcadeTown(now) {
   discoLights.forEach((light,index)=>{light.material.emissiveIntensity=.25+Math.sin(elapsed*4+index)*.1;});
   if(gameState.started&&!gameState.gameOver&&!gameState.modalOpen&&!saleGameplayPaused(now))updateStuntLanes(previousStuntPosition,player.position,gameState.activePlayTime*1000);
   deliveryPads.forEach(pad=>{const active=gameState.activeOrder?.destinationId===pad.district.id;pad.ring.visible=active;pad.ring.material.opacity=.4+Math.sin(elapsed*4)*.1;});
-  CRAFTING_COUNTERS.slice(1).forEach(counter=>{const ready=gameState.activeOrder&&!gameState.hasFinishedDesign;counter.ring.material.opacity=ready?.3:.1;});
+  CRAFTING_COUNTERS.slice(1).forEach(counter=>{const ready=gameState.activeOrder&&(!gameState.hasFinishedDesign||gameState.designRejected);counter.ring.material.opacity=ready?.3:.1;});
   for(let index=comicEvents.length-1;index>=0;index--){const event=comicEvents[index],age=(now-event.start)/1000;
     if(age>6||gameState.gameOver){scene.remove(event.group);disposeGeneratedGroup(event.group);comicEvents.splice(index,1);continue;}
     if(event.kind==='ducks')event.group.children.forEach((duck,i)=>duck.position.set(((age*1.7+i*.8)%6)-3,Math.abs(Math.sin(age*7+i))*.12,Math.sin(age+i)*.35));
@@ -1269,9 +1311,9 @@ function updateStuntLanes(from,to,now){
     for(const [kind,point,bonus]of [['hurdle',lane.hurdle,25],['hoop',lane.hoop,50]]){
       const key=kind+'Jump';if(lane[key]===jumpSequence||!airborneCrossing(from,to,point,lane.direction,kind==='hoop'))continue;
       lane[key]=jumpSequence;gameState.speedBoostUntil=Math.max(gameState.speedBoostUntil,gameState.runwayRushUntil,now)+750;
-      if(gameState.activeOrder){gameState.activeOrder.hustleBonus+=bonus;popup(`${kind.toUpperCase()} · +${bonus} HUSTLE`,'sale');}
+      if(gameState.activeOrder){gameState.activeOrder.styleTips+=bonus;popup(`${kind.toUpperCase()} · +${bonus} HUSTLE`,'sale');}
       if(kind==='hurdle'&&lane.stage===1)lane.stage=2;
-      else if(kind==='hoop'&&lane.stage===2&&now-lane.startedAt<=4000){lane.stage=0;lane.locked=true;gameState.runwayRushUntil=now+3000;if(gameState.activeOrder)gameState.activeOrder.hustleBonus+=100;popup('RUNWAY RUSH! · +100 HUSTLE','sale');playSound('perfect');burst(player.position.clone().setY(.5),16,C.gold,'sparkle',.7);}
+      else if(kind==='hoop'&&lane.stage===2&&now-lane.startedAt<=4000){lane.stage=0;lane.locked=true;gameState.runwayRushUntil=now+3000;if(gameState.activeOrder)gameState.activeOrder.styleTips+=100;popup('RUNWAY RUSH! · +100 HUSTLE','sale');playSound('perfect');burst(player.position.clone().setY(.5),16,C.gold,'sparkle',.7);}
       updateHUD();
     }
   }
@@ -1298,7 +1340,7 @@ function updateTownMapAndLabels(now) {
   const offeredCustomers=gameState.orderOffers.map(offer=>customers.find(customer=>customer.id===offer.customerId));
   document.querySelector('#town-map-orders').innerHTML=offeredCustomers.map(customer=>`<text x="${customer.wrapper.position.x+20}" y="${customer.wrapper.position.z+20}" text-anchor="middle" style="font-size:3px;fill:#7B4DFF">?<title>${customer.name}: order available</title></text>`).join('');
   const target=navigationTarget();
-  const objective=target?[target.point.x,target.point.z]:null,caption=target?target.label:gameState.activeOrder?'MAKE YOUR OUTFIT':'CHOOSE AN ORDER';
+  const objective=target?[target.point.x,target.point.z]:null,caption=target?target.label:gameState.activeOrder?'CHOOSE MATERIALS · '+(touchDevice?'GUIDE':'G FOR GUIDE'):'CHOOSE AN ORDER';
   mapObjective.style.display=objective?'':'none';
   if(objective){mapObjective.setAttribute('cx',objective[0]+20);mapObjective.setAttribute('cy',objective[1]+20);}
   document.querySelector('#town-map-caption').textContent=caption;
@@ -1320,7 +1362,7 @@ function updateTownMapAndLabels(now) {
     const width=label.element.offsetWidth||label.element.textContent.length*7+24,height=label.element.offsetHeight||32;
     const x=gameViewport.left+(screen.x+1)*gameViewport.width/2,y=gameViewport.top+(1-screen.y)*gameViewport.height/2;
     const rect={left:x-width/2-4,right:x+width/2+4,top:y-height-4,bottom:y+4};
-    const enabled=(!label.element.classList.contains('customer-bubble'))||label.element.classList.contains('visible');
+    const enabled=!label.element.classList.contains('customer-bubble')||label.element.classList.contains('visible');
     const eligible=enabled&&gameState.started&&!gameState.modalOpen&&!gameState.gameOver&&(priority>=6||distance<4)&&screen.z>-1&&screen.z<1&&rect.right>gameViewport.left&&rect.left<gameViewport.left+gameViewport.width&&rect.bottom>gameViewport.top&&rect.top<gameViewport.top+gameViewport.height;
     const visible=eligible&&occupied.length<(compactMode?2:4)&&!occupied.some(other=>overlaps(rect,other))&&!hudRects.some(other=>overlaps(rect,other))&&!(document.querySelector('#town-map').closest('#hud')&&overlaps(rect,mapRect));
     label.element.style.visibility=visible?'visible':'hidden';
@@ -1355,7 +1397,7 @@ function refreshWorldShowcase() {
   showcasePlinths.forEach((plinth,index)=>{
     disposeGeneratedGroup(plinth.garmentLayer);plinth.garmentLayer.clear();
     const entry=gameState.showcase[index];
-    if(entry){buildGarmentModel(entry.design,plinth.garmentLayer,false);plinth.plaque.element.textContent=`${entry.design.rarity} · ${entry.design.craftRating}`;}
+    if(entry){buildGarmentModel(entry.design,plinth.garmentLayer,false);plinth.plaque.element.textContent=`${entry.design.rarity} · ${briefVerdict(entry.briefFit)}`;}
     else plinth.plaque.element.textContent='EMPTY';
   });
 }
@@ -1445,12 +1487,14 @@ function prepareAnimatedCharacter(gltf, wrapper, targetHeight) {
   const idleClip = findClip(clips, 'idle');
   const walkClip = findClip(clips, 'walk');
   const celebrationClip = findClip(clips, 'emote-yes');
+  const angryClip = findClip(clips, 'emote-no');
   const jumpClip = findClip(clips, 'jump');
   const sprintClip=wrapper===player?findClip(clips,'sprint'):null;
   const actions = {
     idle: idleClip ? mixer.clipAction(idleClip) : null,
     walk: walkClip ? mixer.clipAction(walkClip) : null,
     celebrate: celebrationClip ? mixer.clipAction(celebrationClip) : null,
+    angry: angryClip ? mixer.clipAction(angryClip) : null,
     jump: jumpClip ? mixer.clipAction(jumpClip) : null,
     sprint:sprintClip?mixer.clipAction(sprintClip):null
   };
@@ -1495,6 +1539,7 @@ window.addEventListener('keydown', event => {
   if(platform.adPending||suspendReasons.has('platform-ad'))return;
   if(event.code==='Space'&&gameState.modalOpen==='design'&&craftChallenge){event.preventDefault();if(!event.repeat&&!simulationSuspended())stopCraftChallenge();return;}
   if(gameState.modalOpen==='results'&&!simulationSuspended()){if(['Space','Enter','KeyE'].includes(event.code)&&!event.repeat){event.preventDefault();if(document.activeElement?.id==='visit-shop'&&event.code!=='KeyE')continueSale(true);else continueSale();}return;}
+  if(event.code==='KeyG'&&!event.repeat){activateGuide();return;}
   if(event.code==='KeyO'&&!event.repeat){openOrderBoard();return;}
   if(event.code==='KeyP'&&!event.repeat){setManualPause(!manualPaused);return;}
   if(simulationSuspended())return;
@@ -1655,9 +1700,13 @@ function refreshCustomerBubble(customer) {
   const request = customerRequest(customer);
   const offer = offerForCustomer(customer.id);
   const selected = gameState.activeOrder?.customerId === customer.id;
+  const showAnnoyance = gameNow() < customer.annoyanceVisibleUntil || gameNow() < customer.fumingUntil;
+  const annoyanceClass = customer.annoyance >= 3 ? 'scribble' : customer.annoyance === 2 ? 'exclaim' : 'squiggle';
+  const annoyance = showAnnoyance && customer.annoyance > 0 ? `<i class="annoyance-indicator ${annoyanceClass}"><b></b><b></b><b></b></i>` : '';
+  const recipeLine = request ? briefMarkup(customer.id) : '';
   const destination=DISTRICTS.find(item=>item.id===(offer?.destinationId||(selected?gameState.activeOrder.destinationId:null)));
   const status = offer ? `<small class="order-available">ORDER AVAILABLE</small><small class="difficulty ${offer.difficultyClass}">${offer.difficulty}</small>` : selected ? '<small class="target-tag">YOUR CUSTOMER</small>' : '';
-  const markup=`${customerPortraitMarkup(customer)}<strong>${customer.name.toUpperCase()}</strong>${status}${destination?`<small class="bubble-destination">→ ${destination.short}</small>`:''}`;
+  const markup=`${annoyance}${customerPortraitMarkup(customer)}<strong>${customer.name.toUpperCase()}</strong>${status}${recipeLine}${destination?`<small class="bubble-destination">→ ${destination.short}</small>`:''}`;
   if(customer.bubble.markup!==markup){customer.bubble.element.innerHTML=markup;customer.bubble.markup=markup;}
   customer.bubble.element.classList.toggle('selected', selected);
   customer.bubble.element.classList.toggle('visible', gameState.started && Boolean(request) && (selected || horizontalDistance(player.position,customer.wrapper.position) <= 7));
@@ -1725,7 +1774,8 @@ async function createCustomers() {
       deliveryPath:[],deliveryIndex:0,atDestination:false,
       pauseDuration:CUSTOMER_PAUSES[index % CUSTOMER_PAUSES.length], pausedUntil:0,
       reactionUntil:0, resumeAt:0, sellingPaused:false, inspectUntil:0,
-
+      annoyance:0, annoyanceVisibleUntil:0, fumingUntil:0, chaseUntil:0,
+      rejectionCount:0, goAwayShown:false, countedAnnoyed:false
     });
   }
 }
@@ -1740,6 +1790,31 @@ function updateCustomers(dt, now) {
     return;
   }
   for (const customer of customers) {
+    const playerDistance = player.position.distanceTo(customer.wrapper.position);
+    if (customer.fumingUntil) {
+      if (now >= customer.fumingUntil) {
+        customer.fumingUntil = 0; customer.chaseUntil = 0; customer.annoyance = 1; customer.goAwayShown = false;
+        if(gameState.activeOrder?.customerId===customer.id) {
+          customer.deliveryPath=walkingPath(customer.wrapper.position,DISTRICTS.find(item=>item.id===gameState.activeOrder.destinationId).destination).slice(1);
+          customer.deliveryIndex=0;customer.atDestination=false;
+        }
+        customer.routeIndex = customer.route.reduce((best, point, index) => {
+          const distance = Math.hypot(customer.wrapper.position.x - point[0], customer.wrapper.position.z - point[1]);
+          return distance < best.distance ? { index, distance } : best;
+        }, { index:0, distance:Infinity }).index;
+      } else {
+        if (now < customer.chaseUntil) {
+          const dx=player.position.x-customer.wrapper.position.x, dz=player.position.z-customer.wrapper.position.z, distance=Math.max(.001,Math.hypot(dx,dz));
+          const nextX=THREE.MathUtils.clamp(customer.wrapper.position.x+dx/distance*2.8*dt,-PLAYER_BOUNDS,PLAYER_BOUNDS);
+          if(!collides(nextX,customer.wrapper.position.z))customer.wrapper.position.x=nextX;
+          const nextZ=THREE.MathUtils.clamp(customer.wrapper.position.z+dz/distance*2.8*dt,-PLAYER_BOUNDS,PLAYER_BOUNDS);
+          if(!collides(customer.wrapper.position.x,nextZ))customer.wrapper.position.z=nextZ;
+          customer.wrapper.rotation.y=Math.atan2(dx,dz); customer.animation.play('walk');
+          if(distance<.9&&!customer.goAwayShown){customer.goAwayShown=true;showCustomerSpeech(customer,'GO AWAY!',1100);}
+        } else customer.animation.play('idle');
+        customer.animation.mixer.update(dt); refreshCustomerBubble(customer); continue;
+      }
+    }
     if (customer.inspectUntil && now < customer.inspectUntil) {
       const dx=player.position.x-customer.wrapper.position.x, dz=player.position.z-customer.wrapper.position.z;
       customer.wrapper.rotation.y=Math.atan2(dx,dz); customer.animation.play('idle'); customer.animation.mixer.update(dt); refreshCustomerBubble(customer); continue;
@@ -1768,7 +1843,6 @@ function updateCustomers(dt, now) {
       customer.animation.play('walk');
     }
     const isDeliveryTarget = gameState.hasFinishedDesign && gameState.activeOrder?.customerId === customer.id;
-    const playerDistance = horizontalDistance(player.position, customer.wrapper.position);
     if (isDeliveryTarget && customer.atDestination && playerDistance <= 1.65) customer.sellingPaused = true;
     else if (!isDeliveryTarget || playerDistance > 2.4) customer.sellingPaused = false;
     if (customer.sellingPaused) {
@@ -1887,14 +1961,9 @@ function buildComponentVisual(definition, parent) {
     for(let i=0;i<5;i++) mesh(sphere,material,[-.32+i*.16,Math.sin(i*Math.PI)*.04,0],[.12,.09,.08],parent);
   }
 }
-function pickupLabelText(definition){return itemName(definition.type);}
-const CATEGORY_SYMBOLS=Object.freeze({garments:'👕',dyes:'●',motifs:'★',trims:'🎀'});
-function materialPicture(category,type){
-  const picture=value=>category==='garments'?garmentThumbnail({...currentDraft(),garmentType:value},'picture-'+value):category==='dyes'?'<i class="slot-swatch" style="--swatch:'+SWATCHES[value]+'"></i>':iconMarkup(value.toLowerCase());
-  return type?picture(type):'<span class="slot-examples">'+Object.keys(gameState.inventory[category]).map(picture).join('')+'</span>';
-}
-function isCompleteDesign(design){return Boolean(design&&recipeComponents(design).every(([category,type])=>type&&Object.hasOwn(gameState.inventory[category],type))&&CUTS.includes(design.cutVariant)&&Object.hasOwn(SWATCHES,design.accentColour)&&design.colour!==design.accentColour);}
-
+function pickupLabelText(definition){if(definition.category==='dyes')return `${definition.type} DYE`;if(definition.category==='motifs')return `${definition.type} PATCH`;return definition.type;}
+const CATEGORY_SYMBOLS=Object.freeze({garments:'G',dyes:'D',motifs:'M',trims:'T'});
+function categoryIcon(category){return category==='dyes'?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2S4 11 4 16a8 8 0 0 0 16 0c0-5-8-14-8-14Z"/></svg>':iconMarkup({garments:'dress',motifs:'star',trims:'bow'}[category]);}
 function createPickupOutline(visual) {
   const outline=visual.clone(true); const outlineMaterial=new THREE.MeshBasicMaterial({color:C.gold,side:THREE.BackSide,depthWrite:false});
   outline.traverse(child=>{if(child.isMesh){child.material=outlineMaterial;child.scale.multiplyScalar(1.09);child.castShadow=false;child.receiveShadow=false;}});
@@ -1912,7 +1981,7 @@ function createComponentPickup(definition, index) {
   const beam=mesh(new THREE.CylinderGeometry(.055,.16,2.3,12,1,true),new THREE.MeshBasicMaterial({color:C.gold,transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}),[0,.62,0],[1,1,1],g,false);beam.visible=false;
   scene.add(g);
   const anchor=new THREE.Vector3(definition.home[0],0,definition.home[1]);
-  pickups.push({ ...definition, definition, anchor, group:g, visual, outline, pedestal, ring, beam, sparkles, wasInside:false, colour:componentMaterial(definition).color, active:true, respawnAt:0, phase:index*.71 });
+  pickups.push({ ...definition, definition, anchor, group:g, visual, outline, pedestal, ring, beam, sparkles, colour:componentMaterial(definition).color, active:true, respawnAt:0, phase:index*.71 });
 }
 function createPickups() {
   COMPONENT_DEFINITIONS.forEach(createComponentPickup);
@@ -1924,17 +1993,20 @@ function createPickups() {
   });
 }
 function updatePickups(dt,now) {
-  if(simulationSuspended()||!gameState.started||gameState.gameOver||gameState.modalOpen||saleGameplayPaused(now))return;
-  const required=missingTargetComponent();
-  for(const pickup of pickups){
-    const inside=horizontalDistance(player.position,pickup.anchor)<=AUTO_PICKUP_RADIUS,entered=inside&&!pickup.wasInside;pickup.wasInside=inside;
-    if(!pickup.active&&now>=pickup.respawnAt){pickup.active=true;pickup.group.visible=true;}
-    if(!pickup.active)continue;
-    pickup.visual.rotation.y+=.65*dt;pickup.outline.rotation.y=pickup.visual.rotation.y;
+  if (!gameState.started || gameState.gameOver || gameState.modalOpen || saleGameplayPaused(now)) return;
+  const required=detailedMaterialGuidance()?missingTargetComponent():null;
+  for (const pickup of pickups) {
+    if (!pickup.active && now >= pickup.respawnAt) {
+      pickup.active = true;
+      pickup.group.visible = true;
+    }
+    if (!pickup.active) continue;
+    pickup.visual.rotation.y += .65*dt;pickup.outline.rotation.y=pickup.visual.rotation.y;
     pickup.visual.position.y=.8+Math.sin(elapsed*Math.PI*3.2+pickup.phase)*.14;pickup.outline.position.y=pickup.visual.position.y;
-    const needed=isNeededPickup(pickup),highlight=activeInteraction?.pointerOnly?activeInteraction.pickup:required;pickup.outline.visible=pickup===highlight;pickup.beam.visible=pickup===highlight;
-    pickup.ring.material.color.setHex(needed?C.gold:C.cream);pickup.ring.material.opacity=needed?.5:.12;
-    if(entered&&needed&&player.position.y<.8)collectPickup(pickup,now);
+    pickup.sparkles.forEach((sparkle,index)=>{sparkle.rotation.y+=dt*(2+index);sparkle.position.y+=(Math.sin(elapsed*3+pickup.phase+index)-Math.sin((elapsed-dt)*3+pickup.phase+index))*.035;});
+    const isRequired=required?.anchor===pickup.anchor;
+    const interacting=activeInteraction?.pickup===pickup;
+    pickup.outline.visible=isRequired||interacting;pickup.beam.visible=isRequired;pickup.ring.material.color.setHex(isNeededPickup(pickup)||interacting?C.gold:C.cream);pickup.ring.material.opacity=interacting?.8:isNeededPickup(pickup)?.5:.12;
   }
 }
 function isNeededPickup(pickup) { return Boolean(gameState.activeOrder&&!gameState.hasFinishedDesign&&categoryTotal(pickup.category)===0); }
@@ -1949,9 +2021,10 @@ function collectPickup(pickup, now) {
   pickup.group.visible = false;
   pickup.respawnAt = now + 3000;
   gameState.inventory[pickup.category][pickup.type]++;
-  syncOutfitSelections();acknowledgeCollection(pickup);
+  acknowledgeCollection(pickup.category);
   collectionHistory.push(componentId(pickup.category, pickup.type));
   burst(pickup.group.position, 8, pickup.colour, 'sphere', .45);
+  popup(`+ ${pickupLabelText(pickup)}`,'pickup');
   pulse('materials-stat');
   playSound('pickup');
   updateHUD();
@@ -1961,6 +2034,7 @@ function collectPickup(pickup, now) {
 function rewardMaterialPickup(pickup, now) {
   const order = gameState.activeOrder;
   if (!order) return;
+  order.collectionProgressAt=gameState.activePlayTime;
   const needed=!gameState.hasFinishedDesign&&categoryTotal(pickup.category)===0;
   const identity=pickup.category;
   if (!needed) {
@@ -1973,18 +2047,13 @@ function rewardMaterialPickup(pickup, now) {
   order.rewardedMaterials.push(identity);
   order.pickupChainExpiresAt = now + 7000;
   const style = order.pickupChain * 50;
-  order.hustleBonus += style;
-
+  order.styleTips += style;
+  const label = order.pickupChain === 1 ? 'MATERIAL FOUND!'  : `MATERIAL RUSH ×${order.pickupChain}`;
+  popup(`${label} • +${style} HUSTLE`,'sale');
 }
-function acknowledgeCollection(pickup){
-  guidance.firstPickup=true;updateHUD();
-  const slot=document.querySelector('[data-slot="'+pickup.category+'"]');
-  if(slot&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
-    const point=(pickup.anchor||pickup.group.position).clone().setY(1).project(camera),rect=slot.getBoundingClientRect();
-    const fly=document.createElement('div');fly.className='pickup-flight';fly.innerHTML=materialPicture(pickup.category,pickup.type);
-    fly.style.left=(gameViewport.left+(point.x+1)*gameViewport.width/2)+'px';fly.style.top=(gameViewport.top+(1-point.y)*gameViewport.height/2)+'px';document.body.append(fly);
-    fly.animate([{transform:'translate(-50%,-50%) scale(1)'},{transform:'translate('+(rect.left+rect.width/2-parseFloat(fly.style.left))+'px,'+(rect.top+rect.height/2-parseFloat(fly.style.top))+'px) scale(.5)',opacity:0}],{duration:380,easing:'ease-out'}).finished.finally(()=>fly.remove());
-  }
+function acknowledgeCollection(category){
+  if(teachingCollection()&&!guidance.firstPickup){guidance.firstPickup=true;toast(`NICE! ${CATEGORY_LABELS[category]} COLLECTED · ${readyCategoryCount()} OF 4`);}
+  if(readyCategoryCount()===4)toast('YOU’VE GOT EVERYTHING! → DESIGN STUDIO');
 }
 
 function removeTemporaryDrop(index) {
@@ -2012,22 +2081,24 @@ function spawnTemporaryDrop(category, type) {
   temporaryDrops.push({ category, type, group, colour:componentMaterial(definition).color, collectibleAt:now + 1250, expiresAt:now + 10000, phase:Math.random() * Math.PI * 2 });
 }
 
-function updateTemporaryDrops(now){
-  if(simulationSuspended()||!gameState.started||gameState.gameOver||gameState.modalOpen||saleGameplayPaused(now))return;
-  for(let index=temporaryDrops.length-1;index>=0;index--){const drop=temporaryDrops[index];
-    if(now>=drop.expiresAt){removeTemporaryDrop(index);continue;}
-    const inside=horizontalDistance(player.position,drop.group.position)<=AUTO_PICKUP_RADIUS,entered=inside&&!drop.wasInside;drop.wasInside=inside;
-    drop.group.rotation.y+=.65/60;drop.group.position.y=.55+Math.sin(elapsed*Math.PI*3.2+drop.phase)*.14;
-    if(entered&&now>=drop.collectibleAt&&isNeededPickup(drop)&&player.position.y<.8)collectTemporaryDrop(drop);
+function updateTemporaryDrops(now) {
+  for (let index = temporaryDrops.length - 1; index >= 0; index--) {
+    const drop = temporaryDrops[index];
+    if (now >= drop.expiresAt) {
+      removeTemporaryDrop(index);
+      continue;
+    }
+    drop.group.rotation.y += .65 / 60;
+    drop.group.position.y = .55 + Math.sin(elapsed * Math.PI * 3.2 + drop.phase) * .14;
   }
 }
 function collectTemporaryDrop(drop) {
   const index=temporaryDrops.indexOf(drop);
   if(index<0||gameNow()<drop.collectibleAt||totalMaterials()>=gameState.bagCapacity||!canReachPickup(drop))return false;
   rewardMaterialPickup(drop,gameNow());gameState.inventory[drop.category][drop.type]++;
-  syncOutfitSelections();acknowledgeCollection(drop);
+  acknowledgeCollection(drop.category);
   collectionHistory.push(componentId(drop.category,drop.type));burst(drop.group.position,8,drop.colour,'sphere',.45);
-  playSound('pickup');removeTemporaryDrop(index);pulse('materials-stat');updateHUD();return true;
+  popup(`+1 ${drop.type}`);playSound('pickup');removeTemporaryDrop(index);pulse('materials-stat');updateHUD();return true;
 }
 
 function removeHistoryEntry(category, type) {
@@ -2043,7 +2114,6 @@ function removeHistoryEntry(category, type) {
 function dropInventoryItem(category, type) {
   if (designRevealLocked || gameState.inventory[category]?.[type] < 1) return false;
   gameState.inventory[category][type]--;
-  syncOutfitSelections();
   removeHistoryEntry(category, type);
   spawnTemporaryDrop(category, type);
   popup(`DROPPED ${type}`);
@@ -2066,7 +2136,7 @@ function quickDrop() {
 function renderBag() {
   const rows = [];
   Object.entries(gameState.inventory).forEach(([category, items]) => Object.entries(items).forEach(([type, count]) => {
-    if (count > 0) rows.push(`<div class="bag-row"><span class="bag-picture">${materialPicture(category,type)}</span><strong>${itemName(type)}</strong><span>${CATEGORY_LABELS[category]}</span><b>×${count}</b><button data-drop-category="${category}" data-drop-type="${type}">DROP</button></div>`);
+    if (count > 0) rows.push(`<div class="bag-row"><strong>${type}</strong><span>${CATEGORY_LABELS[category]}</span><b>×${count}</b><button data-drop-category="${category}" data-drop-type="${type}">DROP</button></div>`);
   }));
   document.querySelector('#bag-usage').textContent = `${totalMaterials()} / ${gameState.bagCapacity} SLOTS USED`;
   document.querySelector('#bag-items').innerHTML = rows.join('') || '<p class="bag-empty">YOUR BAG IS EMPTY</p>';
@@ -2078,10 +2148,12 @@ function toggleBag() {
   openModal('bag');
 }
 
-function updateBagFullWarning(){
-  const warning=document.querySelector('#bag-full-warning'),missing=MATERIAL_CATEGORIES.filter(category=>!categoryTotal(category));
-  warning.classList.toggle('visible',gameState.started&&!gameState.gameOver&&!gameState.modalOpen&&totalMaterials()>=gameState.bagCapacity);
-  warning.querySelector('span').textContent=missing.length?'FREE A SPACE FOR '+CATEGORY_LABELS[missing[0]]:'Swap or store spare items.';
+function updateBagFullWarning() {
+  const warning = document.querySelector('#bag-full-warning');
+  if (!warning) return;
+  const nearLandmark = pickups.some(pickup => pickup.active && canReachPickup(pickup));
+  const nearTemporary = temporaryDrops.some(drop => canReachPickup(drop));
+  warning.classList.toggle('visible', gameState.started && !gameState.gameOver && !gameState.modalOpen && totalMaterials() >= gameState.bagCapacity && (nearLandmark || nearTemporary));
 }
 
 // 12. interactions
@@ -2106,7 +2178,7 @@ function updateInteractions(now) {
   const options = [];
   for(const counter of CRAFTING_COUNTERS) {
     const distance=horizontalDistance(player.position,counter.point);
-    if(gameState.activeOrder&&!gameState.hasFinishedDesign&&distance<=INTERACTION_DISTANCE&&clearWalkSegment([player.position.x,player.position.z],[counter.point.x,counter.point.z])) options.push({type:'studio',priority:0,distance,label:'ENTER DESIGN STUDIO'});
+    if(gameState.activeOrder&&(!gameState.hasFinishedDesign||gameState.designRejected)&&distance<=INTERACTION_DISTANCE&&clearWalkSegment([player.position.x,player.position.z],[counter.point.x,counter.point.z])) options.push({type:'studio',priority:0,distance,label:gameState.designRejected?'REWORK THE LOOK':'ENTER DESIGN STUDIO'});
   }
   const shopDistance=horizontalDistance(player.position,SHOP_POINT);
   if(shopDistance<=INTERACTION_DISTANCE)options.push({type:'shop',distance:shopDistance,label:'ENTER MY SHOP'});
@@ -2114,32 +2186,31 @@ function updateInteractions(now) {
     const customer = customers.find(item => item.id === offer.customerId);
     if (!customer) return;
     const distance = horizontalDistance(player.position,customer.wrapper.position);
-    if (distance <= 1.65 && !customer.resumeAt) options.push({ type:'accept-order', priority:0,offer, distance, label:`ACCEPT ${customer.name.toUpperCase()}’S ORDER` });
+    if (distance <= 1.65 && !customer.resumeAt && !customer.fumingUntil) options.push({ type:'accept-order', priority:0,offer, distance, label:`ACCEPT ${customer.name.toUpperCase()}’S ORDER` });
   });
   if (gameState.hasFinishedDesign && gameState.finishedDesign) customers.forEach(customer => {
     if (customer.id !== gameState.activeOrder?.customerId) return;
     const distance = horizontalDistance(player.position,customer.wrapper.position);
-    if(distance<=1.65&&customer.atDestination&&!customer.resumeAt&&!customer.inspectUntil&&now>=customer.reactionUntil){
-      options.push({type:'customer',priority:0,customer,distance,label:'DELIVER TO '+customer.name.toUpperCase()});
+    if (distance <= 1.65 && customer.fumingUntil) {
+      options.push({ type:'blocked-customer', customer, distance, label:`LEAVE ${customer.name.toUpperCase()} ALONE!` });
+    } else if (distance <= 1.65 && customer.atDestination && !customer.resumeAt && !customer.inspectUntil && now >= customer.reactionUntil) {
+      options.push({ type:'customer',priority:0, customer, distance, label:`SELL TO ${customer.name.toUpperCase()}` });
     }
   });
   dumpsters.forEach(d => {
     const distance = player.position.distanceTo(d.point);
     if (now >= d.readyAt && distance <= INTERACTION_DISTANCE) options.push({ type: 'dumpster', dumpster: d, distance, label: 'CHECK DUMPSTER' });
   });
-  if(gameState.activeOrder&&!gameState.hasFinishedDesign&&totalMaterials()<gameState.bagCapacity)for(const pickup of pickups){
-    if(pickup.active&&!isNeededPickup(pickup)&&canReachPickup(pickup))options.push({type:'pickup',pointerOnly:true,priority:2,pickup,distance:horizontalDistance(player.position,pickup.anchor),label:'ADD '+itemName(pickup.type)+' TO BAG'});
-  }
+  pickups.forEach(pickup=>{if(pickup.active&&canReachPickup(pickup))options.push({type:'pickup',priority:2,pickup,distance:horizontalDistance(player.position,pickup.anchor),label:`${pickupLabelText(pickup)} · ${CATEGORY_LABELS[pickup.category]}`});});
+  temporaryDrops.forEach(drop=>{if(now>=drop.collectibleAt&&canReachPickup(drop))options.push({type:'drop',priority:2,drop,distance:horizontalDistance(player.position,drop.group.position),label:`DROPPED ${drop.type}`});});
   options.sort((a,b)=>(a.priority??1)-(b.priority??1)||a.distance-b.distance);
   activeInteraction = options[0] || null;
-  const nearby=!activeInteraction&&!guidance.firstPickup&&(!onboardingSeen||gameState.practice)&&missingTargetComponent();
-  setPrompt(activeInteraction?.label||(nearby&&canReachPickup(nearby)?'WALK OVER IT!':null),activeInteraction?.pointerOnly?activeInteraction.pickup:nearby&&canReachPickup(nearby)?nearby:null);
+  setPrompt(activeInteraction?.label || null);
 }
 function handleInteraction(pointerTarget=null) {
   if (simulationSuspended() || !gameState.started || gameState.gameOver || gameState.modalOpen || saleGameplayPaused()) return;
   updateInteractions(gameNow());
   const interaction = pointerTarget||activeInteraction;if(!interaction)return;
-  if(interaction.pointerOnly&&!pointerTarget)return;
   if (interaction.type === 'studio') openDesignModal();
   else if(interaction.type==='shop')openModal('shop');
   else if(interaction.type==='accept-order')acceptOrder(interaction.offer);
@@ -2147,65 +2218,90 @@ function handleInteraction(pointerTarget=null) {
   else if (interaction.type === 'dumpster') useDumpster(interaction.dumpster);
   else if (interaction.type === 'pickup'||interaction.type==='drop') {
     const collected=interaction.type==='pickup'?collectPickup(interaction.pickup,gameNow()):collectTemporaryDrop(interaction.drop);
-    if(!collected)updateBagFullWarning();
+    if(!collected&&totalMaterials()>=gameState.bagCapacity)toast(touchDevice?'BAG FULL · DROP A SPARE OR OPEN BAG':'BAG FULL · Q DROP A SPARE / B BAG');
     updateInteractions(gameNow());
   }
 }
 
 // 13. design system
-function openDesignModal(){
-  if(!gameState.activeOrder||saleGameplayPaused()||gameState.hasFinishedDesign)return;
-  syncOutfitSelections();renderCustomerCards();designRevealToken++;designRevealLocked=false;pendingDesign=null;craftChallenge=null;
+function openDesignModal() {
+  if(!gameState.activeOrder||saleGameplayPaused())return;
+  const rework=gameState.designRejected&&gameState.finishedDesign;
+  const fields={garments:'selectedGarmentType',dyes:'selectedColour',motifs:'selectedMotif',trims:'selectedTrim'};
+  for(const category of MATERIAL_CATEGORIES){const field=fields[category],key=CATEGORY_RECIPE_KEY[category];
+    gameState[field]=rework?rework[key]:gameState.inventory[category][gameState[field]]>0?gameState[field]:Object.keys(gameState.inventory[category]).find(type=>gameState.inventory[category][type]>0)||null;
+  }
+  if(rework){gameState.selectedCut=rework.cutVariant;gameState.selectedAccent=rework.accentColour;}
+  renderCustomerCards();designRevealToken++;designRevealLocked=false;pendingDesign=null;craftChallenge=null;
   document.querySelector('#craft-challenge').classList.add('hidden');document.querySelector('#stop-craft').classList.add('hidden');resetStudioReveal();
-document.querySelector('#take-design').classList.add('hidden');document.querySelector('#create-design').classList.remove('hidden');
+  document.querySelector('#style-roll').classList.remove('active');document.querySelector('#take-design').classList.add('hidden');document.querySelector('#create-design').classList.remove('hidden');
   document.querySelectorAll('#cancel-design,#create-design,#take-design,#design-modal .practice-modal-skip').forEach(control=>control.disabled=false);
   ensureDraftSeed();syncDesignOptions();setDesignerCategory(gameState.activeOrder.designerCategory||'garment');openModal('design');
 }
 function ensureDraftSeed(){
   const order=gameState.activeOrder;if(!order)return 0;
+  if(gameState.designRejected&&gameState.finishedDesign)order.draftDesignSeed=gameState.finishedDesign.designSeed;
   if(order.draftDesignSeed===null||order.draftDesignSeed===undefined)order.draftDesignSeed=crypto.getRandomValues(new Uint32Array(1))[0];
   return order.draftDesignSeed;
 }
 function setDesignerCategory(category){
   if(!['garment','colour','motif','trim','cut','accent'].includes(category)||designRevealLocked)return;
   if(gameState.activeOrder)gameState.activeOrder.designerCategory=category;
-  const extra=['cut','accent'].includes(category);document.querySelector('.design-tabs').dataset.extras=String(extra);
-  const more=document.querySelector('#more-looks');more.textContent=extra?'BACK TO OUTFIT':'MORE LOOKS';more.setAttribute('aria-expanded',extra);
-  document.querySelectorAll('[data-design-tab]').forEach(button=>{const active=button.dataset.designTab===category;button.hidden=extra!==['cut','accent'].includes(button.dataset.designTab);button.classList.toggle('active',active);button.setAttribute('aria-selected',active);button.tabIndex=active?0:-1;});
+  document.querySelectorAll('[data-design-tab]').forEach(button=>{const active=button.dataset.designTab===category;button.classList.toggle('active',active);button.setAttribute('aria-selected',active);button.tabIndex=active?0:-1;});
   document.querySelectorAll('[data-design-panel]').forEach(panel=>panel.hidden=panel.dataset.designPanel!==category);
 }
-
-function canCommitDraft(draft=currentDraft()){return Boolean(gameState.activeOrder&&isCompleteDesign(draft)&&recipeComponents(draft).every(([category,type])=>gameState.inventory[category][type]>0));}
+function draftMaterialChanges(draft,original=null){return recipeComponents(draft).filter(([category,type])=>!original||original[CATEGORY_RECIPE_KEY[category]]!==type);}
+function canCommitDraft(draft=currentDraft()){const original=gameState.designRejected?gameState.finishedDesign:null;return Boolean(gameState.activeOrder&&draft.accentColour!==draft.colour&&recipeComponents(draft).every(([category,type])=>type&&type in gameState.inventory[category])&&draftMaterialChanges(draft,original).every(([category,type])=>gameState.inventory[category][type]>0));}
 
 function currentDraft() {
   return { garmentType:gameState.selectedGarmentType, colour:gameState.selectedColour, motif:gameState.selectedMotif, trim:gameState.selectedTrim, cutVariant:gameState.selectedCut, accentColour:gameState.selectedAccent };
 }
 
-function renderCustomerCards(){const customer=targetCustomer();document.querySelector('#customer-cards').innerHTML=customer?customerPortraitMarkup(customer)+'<strong>MAKE AN OUTFIT FOR '+customer.name.toUpperCase()+'!</strong>':'';document.querySelector('#design-heading').textContent='MAKE YOUR OUTFIT';}
+function renderCustomerCards() {
+  const customer=targetCustomer();document.querySelector('#customer-cards').innerHTML=customer?`<div class="customer-card selected">${customerPortraitMarkup(customer)}<strong>${customer.name.toUpperCase()} WANTS</strong>${briefMarkup(customer.id)}</div>`:'';
+  document.querySelector('#design-heading').textContent=customer?`${customer.name.toUpperCase()}’S LOOK`:'CREATE YOUR LOOK';
+}
+function briefChoiceVisual(choice){
+  if(SWATCHES[choice])return `<i class="fabric-swatch" style="--swatch:${SWATCHES[choice]}"></i>`;
+  if(['TOP','DRESS','SKIRT',...CUTS].includes(choice))return garmentThumbnail({...currentDraft(),garmentType:['TOP','DRESS','SKIRT'].includes(choice)?choice:'DRESS',cutVariant:CUTS.includes(choice)?choice:'CLASSIC'},'brief-'+choice);
+  if(['BOW','BELT','RUFFLE'].includes(choice))return trimThumbnail(choice);
+  return `<svg viewBox="-1 -1 2 2" class="motif-option" aria-hidden="true"><path d="${svgMotifPath(choice)}"/></svg>`;
+}
+function renderCombinationGuide(){
+  const brief=customerBrief();if(!brief.styleTag)return;
+  const available=choice=>CUTS.includes(choice)||Object.values(gameState.inventory).some(items=>items[choice]>0)||recipeComponents(gameState.designRejected?gameState.finishedDesign:null).some(([,type])=>type===choice);
+  const pairs=[...FASHION_TRAIT_RULES[brief.styleTag]].sort((a,b)=>b.filter(available).length-a.filter(available).length);
+  const palette=Object.entries(PALETTE_MOOD_RULES).filter(([,moods])=>moods.includes(brief.paletteTag)).map(([key])=>key.split('|')).sort((a,b)=>Number(b.includes(gameState.selectedColour))-Number(a.includes(gameState.selectedColour)));
+  document.querySelector('#combination-guide').innerHTML=[[brief.styleTag,pairs[0]],[brief.paletteTag,palette[0]]].map(([label,pair])=>`<div><strong>${label}</strong><span>${pair.map(choice=>`<span class="brief-choice" title="${choice}">${briefChoiceVisual(choice)}<small>${choice}</small></span>`).join('<b>+</b>')}</span></div>`).join('');
+}
 
 function syncDesignOptions() {
   if(gameState.selectedAccent===gameState.selectedColour)gameState.selectedAccent=Object.keys(SWATCHES).find(colour=>colour!==gameState.selectedColour);
-  document.querySelector('#accent-options').innerHTML=Object.keys(SWATCHES).filter(colour=>colour!==gameState.selectedColour).map(colour=>`<button data-accent="${colour}" class="${gameState.selectedAccent===colour?'selected':''}" aria-pressed="${gameState.selectedAccent===colour}"><i class="fabric-swatch" style="--swatch:${SWATCHES[colour]}"></i><span>${itemName(colour)}</span></button>`).join('');
-  document.querySelectorAll('[data-cut]').forEach(button=>{button.innerHTML=`${garmentThumbnail({...currentDraft(),cutVariant:button.dataset.cut},'cut-'+button.dataset.cut)}<span>${itemName(button.dataset.cut)}</span>`;button.disabled=false;button.classList.toggle('selected',button.dataset.cut===gameState.selectedCut);button.setAttribute('aria-pressed',button.dataset.cut===gameState.selectedCut);});
+  document.querySelector('#accent-options').innerHTML=Object.keys(SWATCHES).filter(colour=>colour!==gameState.selectedColour).map(colour=>`<button data-accent="${colour}" class="${gameState.selectedAccent===colour?'selected':''}" aria-pressed="${gameState.selectedAccent===colour}"><i class="fabric-swatch" style="--swatch:${SWATCHES[colour]}"></i><span>${colour}</span></button>`).join('');
+  document.querySelectorAll('[data-cut]').forEach(button=>{button.innerHTML=`${garmentThumbnail({...currentDraft(),cutVariant:button.dataset.cut},'cut-'+button.dataset.cut)}<span>${button.dataset.cut}</span>`;button.disabled=false;button.classList.toggle('selected',button.dataset.cut===gameState.selectedCut);button.setAttribute('aria-pressed',button.dataset.cut===gameState.selectedCut);});
+  const original=gameState.designRejected?gameState.finishedDesign:null;
   for(const [selector,category,key,field]of [['[data-garment]','garments','garment','selectedGarmentType'],['[data-colour]','dyes','colour','selectedColour'],['[data-motif]','motifs','motif','selectedMotif'],['[data-trim]','trims','trim','selectedTrim']]){
-    document.querySelectorAll(selector).forEach(button=>{const type=button.dataset[key],count=gameState.inventory[category][type];
+    document.querySelectorAll(selector).forEach(button=>{const type=button.dataset[key],count=gameState.inventory[category][type],retained=original?.[CATEGORY_RECIPE_KEY[category]]===type;
       const visual=category==='garments'?garmentThumbnail({...currentDraft(),garmentType:type},'garment-'+type):category==='dyes'?`<i class="fabric-swatch" style="--swatch:${SWATCHES[type]}"></i>`:category==='motifs'?`<svg viewBox="-1 -1 2 2" class="motif-option" aria-hidden="true"><path d="${svgMotifPath(type)}"/>${type==='FLOWER'?'<circle r=".19" fill="#FFFDFB" stroke="none"/>':''}</svg>`:trimThumbnail(type);
-      button.innerHTML=`${visual}<span>${itemName(type)}</span><small class="owned-count">${count?`×${count}`:'FIND IN TOWN'}</small>`;
-      button.disabled=count===0;button.title=count?`${count} owned`:supplierHint(category,type);button.classList.toggle('selected',type===gameState[field]);button.setAttribute('aria-pressed',type===gameState[field]);
+      button.innerHTML=`${visual}<span>${type}</span><small class="owned-count">${retained?'IN LOOK':count?`×${count}`:'FIND IN TOWN'}</small>`;
+      button.disabled=count===0&&!retained;button.title=retained?'Keep this component free':count?`${count} owned`:supplierHint(category,type);button.classList.toggle('selected',type===gameState[field]);button.setAttribute('aria-pressed',type===gameState[field]);
     });
   }
   const missing=MATERIAL_CATEGORIES.filter(category=>!currentDraft()[CATEGORY_RECIPE_KEY[category]]);
-  document.querySelector('#design-supply-status').textContent=missing.length?`FIND ${CATEGORY_LABELS[missing[0]]} IN TOWN`:'Your outfit is ready. MAKE IT!';
+  document.querySelector('#design-supply-status').textContent=missing.length?`FIND ${CATEGORY_LABELS[missing[0]]} IN TOWN`:original?'Keep pieces free; only replacements use supplies.':'Pick your look, then MAKE IT!';
   document.querySelector('#design-supply-status').dataset.missing=String(missing.length>0);
-  document.querySelector('#create-design').disabled=!canCommitDraft();updateFashionPreview();
+  document.querySelector('#create-design').disabled=!canCommitDraft();updateFashionPreview();renderCombinationGuide();
   document.querySelector('#create-design').textContent=missing.length?`NEED ${CATEGORY_LABELS[missing[0]]}`:'MAKE IT!';
   const draft=currentDraft();
-  document.querySelectorAll('[data-design-tab]').forEach(button=>{const key={garment:'garmentType',colour:'colour',motif:'motif',trim:'trim',cut:'cutVariant',accent:'accentColour'}[button.dataset.designTab];button.classList.toggle('chosen',Boolean(draft[key]));const category={garment:'garments',colour:'dyes',motif:'motifs',trim:'trims'}[button.dataset.designTab];if(category)button.innerHTML=materialPicture(category,draft[key]||Object.keys(gameState.inventory[category])[0])+'<span>'+CATEGORY_LABELS[category]+'</span>';});
+  document.querySelectorAll('[data-design-tab]').forEach(button=>{const key={garment:'garmentType',colour:'colour',motif:'motif',trim:'trim',cut:'cutVariant',accent:'accentColour'}[button.dataset.designTab];button.classList.toggle('chosen',Boolean(draft[key]));});
 }
+
+function copyDesignComposition(design){return Object.fromEntries(['fashionTraits','traitReasons','paletteMoods','styleMatches','paletteMatches','touchMatches'].filter(key=>design[key]!==undefined).map(key=>[key,JSON.parse(JSON.stringify(design[key]))]));}
 
 const CUTS = ['CLASSIC','PUFFY','LAYERED','ASYMMETRIC'];
 const RARITY_BONUS = Object.freeze({ EVERYDAY:0, CUTE:5, FABULOUS:12, LEGENDARY:30 });
 const RARITY_SCORE_BONUS = Object.freeze({ EVERYDAY:0, CUTE:100, FABULOUS:300, LEGENDARY:800 });
+const RARITY_TIME_BONUS = Object.freeze({ EVERYDAY:0, CUTE:0, FABULOUS:0, LEGENDARY:0 });
 const RARITY_ADJECTIVE = Object.freeze({ EVERYDAY:'SWEET', CUTE:'ADORABLE', FABULOUS:'FABULOUS', LEGENDARY:'LEGENDARY' });
 const SWATCHES = { LAVENDER:'#9A7BFF', MINT:'#75E5C1', PEACH:'#FF9877', SKY:'#70CFFF' };
 let pendingDesign = null;
@@ -2226,12 +2322,12 @@ function createSeededDesign(draft, seed) {
   return { ...draft, designSeed:seed, cutVariant, accentColour };
 }
 function rarityForRoll(roll){return roll<.5?'EVERYDAY':roll<.8?'CUTE':roll<.95?'FABULOUS':'LEGENDARY';}
-function rarityQualityRoll(design){const stitchBoost=design.craftBonus===250?.12:design.craftBonus===100?.03:0;return THREE.MathUtils.clamp(seededUnit(design.designSeed,2)+stitchBoost,0,1-Number.EPSILON);}
+function rarityQualityRoll(design) { const stitchBoost=design.craftBonus===250?.12:design.craftBonus===100?.03:0;return THREE.MathUtils.clamp(seededUnit(design.designSeed,2)+(BRIEF_RARITY_BOOST[design.briefFit]||0)+stitchBoost,0,1-Number.EPSILON); }
 function finalizeDesignQuality(design,craftResult) {
   Object.assign(design,{craftRating:craftResult.rating,craftBonus:craftResult.bonus});
   design.rarity=rarityForRoll(rarityQualityRoll(design));
   design.legendaryTrait=resolveLegendaryTrait(design);
-  design.name=design.legendaryTrait?`${design.legendaryTrait} ${itemName(design.colour)} ${itemName(design.garmentType)}`:`${RARITY_ADJECTIVE[design.rarity]} ${itemName(design.cutVariant)} ${itemName(design.colour)} ${itemName(design.garmentType)}`;
+  design.name=design.legendaryTrait?`${design.legendaryTrait} ${design.colour} ${design.garmentType}`:`${RARITY_ADJECTIVE[design.rarity]} ${design.cutVariant} ${design.colour} ${design.garmentType}`;
   return design;
 }
 // Plain data is the sole source of garment identity for SVG, carry and Showcase.
@@ -2430,13 +2526,14 @@ function garmentSpecMarkup(spec,id='live'){
   </g>
   <g class="trim-treatment" fill="${spec.palette.accent}" stroke-width="1.4" ${spec.trim.type==='BELT'?`clip-path="url(#${scope}-clip)"`:''}>${trimSpecMarkup(spec,g)}</g></g>`;
 }
-function garmentViewBox(garment){return garment==='TOP'?'65 75 170 150':garment==='SKIRT'?'55 168 190 175':'55 75 190 270';}
-function garmentThumbnail(design,id='thumbnail'){const spec=deriveGarmentVisualSpec({...design,designSeed:gameState.activeOrder?.draftDesignSeed||0,rarity:null,legendaryTrait:null});return `<svg class="garment-option" viewBox="${garmentViewBox(spec.garment)}" aria-hidden="true">${garmentSpecMarkup(spec,id)}</svg>`;}
+function garmentThumbnail(design,id='thumbnail'){const spec=deriveGarmentVisualSpec({...design,designSeed:gameState.activeOrder?.draftDesignSeed||0,rarity:null,legendaryTrait:null});return `<svg class="garment-option" viewBox="45 65 210 280" aria-hidden="true">${garmentSpecMarkup(spec,id)}</svg>`;}
 function trimThumbnail(type){const spec=deriveGarmentVisualSpec({garmentType:'TOP',trim:type,colour:'LAVENDER',accentColour:'PEACH',designSeed:0});return `<svg class="trim-option" viewBox="${type==='BOW'?'-40 -65 80 80':type==='BELT'?'-40 15 80 40':'-48 40 96 40'}" aria-hidden="true"><g fill="${spec.palette.accent}" stroke="#625374" stroke-width="2">${trimSpecMarkup(spec)}</g></svg>`;}
 function updateFashionPreview(forcedDesign=null){
   const draft=currentDraft(),design=forcedDesign||{...draft,designSeed:ensureDraftSeed(),rarity:null,legendaryTrait:null};
   const spec=deriveGarmentVisualSpec(design),layer=document.querySelector('#garment-layer');layer.innerHTML=garmentSpecMarkup(spec);
   layer.dataset.seed=design.designSeed;layer.dataset.rarity=spec.rarity;layer.dataset.layout=spec.motif.layout;
+  const composition=deriveLookComposition(design),look=document.querySelector('#match-preview'),previous=new Set([...look.querySelectorAll('[data-look-trait]')].map(el=>el.dataset.lookTrait));
+  look.innerHTML=`<strong>YOUR CURRENT LOOK</strong><div>${composition.fashionTraits.map(trait=>`<span data-look-trait="${trait}" class="${previous.has(trait)?'':'trait-arrival'}">${trait}</span>`).join(' · ')||'<span class="look-empty">Try another cut</span>'}</div><div>${composition.paletteMoods.join(' · ')||'<span class="look-empty">Choose two colours</span>'}</div>`;
   if(!forcedDesign&&!matchMedia('(prefers-reduced-motion: reduce)').matches)layer.animate([{opacity:.7,transform:'translateY(2px)'},{opacity:1,transform:'translateY(0)'}],{duration:160});
 }
 function makeMotifShape(pattern){
@@ -2506,10 +2603,10 @@ function scheduleDesignReveal(token, delay, callback) {
 }
 function resetStudioReveal() {
   const modal=document.querySelector('#design-modal'), preview=document.querySelector('#fashion-preview'), reveal=document.querySelector('#studio-reveal');
-  modal.classList.remove('reveal-everyday','reveal-cute','reveal-fabulous','reveal-legendary');
-  preview.classList.remove('reveal-everyday','reveal-cute','reveal-fabulous','reveal-legendary');
+  modal.classList.remove('reveal-everyday','reveal-cute','reveal-fabulous','reveal-legendary','legendary-hold');
+  preview.classList.remove('creating','rolling','anticipating','reveal-everyday','reveal-cute','reveal-fabulous','reveal-legendary');
   if(reveal)reveal.replaceChildren();
-  document.querySelectorAll('.component-fly,.pickup-flight').forEach(element=>element.remove());
+  document.querySelectorAll('.component-fly').forEach(element=>element.remove());
 }
 function animateDesignComponents(draft) {
   const previewRect=document.querySelector('#fashion-preview').getBoundingClientRect();
@@ -2545,19 +2642,27 @@ function addStudioParticles(count, kind, seed) {
 function revealStudioRarity(design) {
   const rarity=design.rarity, lower=rarity.toLowerCase(), modal=document.querySelector('#design-modal');
   const reveal=document.querySelector('#studio-reveal'), preview=document.querySelector('#fashion-preview');
-  modal.classList.add(`reveal-${lower}`); preview.classList.add(`reveal-${lower}`);
+  modal.classList.remove('legendary-hold'); modal.classList.add(`reveal-${lower}`); preview.classList.remove('rolling','anticipating'); preview.classList.add(`reveal-${lower}`);
+  document.querySelector('#roll-rarity').textContent=rarity;
   updateFashionPreview(design);
   const headline=rarity==='EVERYDAY'?'EVERYDAY':`${rarity}!`;
   const subheadline=rarity==='LEGENDARY'?`<span class="legendary-trait-name">${design.legendaryTrait}</span>`:'';
-  const bonuses=rarity==='FABULOUS'||rarity==='LEGENDARY'?`<em>+${RARITY_BONUS[rarity]} COINS ON SALE<br>+${RARITY_SCORE_BONUS[rarity]} SCORE</em>`:'';
-  reveal.innerHTML=`${rarity==='LEGENDARY'?'<div class="legendary-ring"></div>':''}<strong>${headline}</strong>${subheadline}<b>${design.name}</b>${bonuses}`;
+  const time=RARITY_TIME_BONUS[rarity];
+  const details=`<span class="reveal-details">${design.cutVariant} CUT · ${design.accentColour} ACCENT<br>${design.motif} MOTIF · ${design.trim} FINISH</span>`;
+  const bonuses=rarity==='FABULOUS'||rarity==='LEGENDARY'?`<em>+${RARITY_BONUS[rarity]} COINS ON SALE<br>+${RARITY_SCORE_BONUS[rarity]} SCORE${time?` · +${time} SEC`:''}</em>`:'';
+  reveal.innerHTML=`${rarity==='LEGENDARY'?'<div class="legendary-ring"></div>':''}<strong>${headline}</strong>${subheadline}<b>${design.name}</b>${details}${bonuses}`;
   addStudioParticles({EVERYDAY:8,CUTE:14,FABULOUS:24,LEGENDARY:40}[rarity],rarity==='LEGENDARY'?'confetti':'sparkle',design.designSeed);
+  document.querySelector('#style-roll-status').textContent=design.name;
+  document.querySelector('#design-result').textContent=`${rarity} • +${RARITY_BONUS[rarity]} COINS • +${RARITY_SCORE_BONUS[rarity]} SCORE${time?` • +${time} SEC`:''}`;
   playSound(`reveal${rarity[0]}${rarity.slice(1).toLowerCase()}`);
 }
-function finishDesignCraft(draft,design,token){
-  if(token!==designRevealToken||design.materialsCommitted||!canCommitDraft(draft))return;
-  for(const[category,type]of recipeComponents(draft)){gameState.inventory[category][type]--;removeHistoryEntry(category,type);}
-  design.materialsCommitted=true;gameState.hasFinishedDesign=true;gameState.finishedDesign=design;revealStudioRarity(design);
+function finishDesignCraft(draft,design,token) {
+  if(token!==designRevealToken||design.materialsCommitted)return;
+  const original=gameState.designRejected?gameState.finishedDesign:null,changes=draftMaterialChanges(draft,original);
+  if(changes.some(([category,type])=>gameState.inventory[category][type]<1))return;
+  for(const [category,type]of changes){gameState.inventory[category][type]--;removeHistoryEntry(category,type);}
+  if(original)for(const [category]of changes){const type=original[CATEGORY_RECIPE_KEY[category]];if(totalMaterials()<gameState.bagCapacity){gameState.inventory[category][type]++;collectionHistory.push(componentId(category,type));}else spawnTemporaryDrop(category,type);}
+  design.materialsCommitted=true;gameState.hasFinishedDesign=true;gameState.designRejected=false;gameState.finishedDesign=design;revealStudioRarity(design);
   scheduleDesignReveal(token,110,()=>{document.querySelector('#take-design').classList.remove('hidden');document.querySelector('#take-design').disabled=false;document.querySelector('#take-design').focus();designRevealLocked=false;updateHUD();});
 }
 function craftResultForProgress(progress) {
@@ -2566,10 +2671,12 @@ function craftResultForProgress(progress) {
 }
 function createDesign() {
   const draft=currentDraft();
-  if(designRevealLocked||gameState.hasFinishedDesign)return;
+  if(designRevealLocked||(gameState.hasFinishedDesign&&!gameState.designRejected))return;
   if(!canCommitDraft(draft)){toast('COLLECT THE MISSING MATERIALS IN TOWN');return;}
   const seed=ensureDraftSeed();
   pendingDesign=createSeededDesign(draft,seed);designRevealLocked=true;
+  Object.assign(pendingDesign,calculateBriefFit(pendingDesign,gameState.activeOrder.customerId),{briefCustomerId:gameState.activeOrder.customerId});
+  document.querySelector('#roll-rarity').textContent='—';
   const token=++designRevealToken;
   document.querySelectorAll('#design-modal button:not(.practice-modal-skip)').forEach(control=>control.disabled=true);
 
@@ -2602,8 +2709,10 @@ function stopCraftChallenge() {
   if(result.bonus===250)addStudioParticles(16,'sparkle',challenge.design.designSeed);playSound(result.bonus===250?'perfect':result.bonus===100?'upgrade':'fail');
   document.querySelector('#stop-craft').classList.add('hidden');
   scheduleDesignReveal(challenge.token,450,()=>{
-
-        animateDesignComponents(challenge.draft);
+    document.querySelector('#style-roll').classList.add('active');
+    document.querySelector('#roll-cut').textContent=challenge.design.cutVariant;
+    document.querySelector('#roll-accent').textContent=challenge.design.accentColour;
+    animateDesignComponents(challenge.draft);
     finishDesignCraft(challenge.draft,challenge.design,challenge.token);
   });
 }
@@ -2614,7 +2723,7 @@ function takeDesign() {
   document.querySelector('#take-design').classList.add('hidden');
   document.querySelector('#create-design').classList.remove('hidden');
   document.querySelectorAll('#design-modal button').forEach(control=>control.disabled=false);
-
+  document.querySelector('#style-roll').classList.remove('active');
   pendingDesign=null; resetStudioReveal(); closeModal('design'); updateHUD();
 }
 
@@ -2641,15 +2750,18 @@ function speedGradeForOrder(order) {
   if(fraction>.1)return {name:'ON TIME',multiplier:1.15,timeBonus:5,coinBonus:5};
   return {name:'CUTTING IT CLOSE',multiplier:.9,timeBonus:0,coinBonus:0};
 }
-function calculateSaleRewards(design,order,streak=gameState.streak){
-  if(!isCompleteDesign(design))return null;
-  const speed=speedGradeForOrder(order),nextStreak=speed.name==='LATE'?0:streak+1,combo=[1,1,1.25,1.5,1.75,2][Math.min(5,nextStreak)],rarity=design.rarity;
-  const ordinary=(50+RARITY_BONUS[rarity]+SHOP_BONUS[gameState.shopLevel]+speed.coinBonus)*(gameState.rareNextSale?2:1);
-  const coins=Math.max(0,Math.round(ordinary*(speed.name==='LATE'?.5:1))),runway=speed.name==='EXPRESS'&&rarity==='LEGENDARY';
-  const score=Math.round((1000+order.hustleBonus)*speed.multiplier*order.difficultyMultiplier*combo)+RARITY_SCORE_BONUS[rarity]+(design.craftBonus||0)+(runway?500:0);
-  return {speed,score,coins,time:speed.timeBonus,nextStreak,combo,runway};
+function calculateSaleRewards(design,order,streak=gameState.streak) {
+  const fit=design.briefFit,speed=speedGradeForOrder(order),accepted=fit>=1;
+  const nextStreak=speed.name==='LATE'?0:streak+1,combo=[1,1,1.25,1.5,1.75,2][Math.min(5,nextStreak)];
+  if(!accepted)return {accepted:false,speed,score:0,coins:0,time:0,nextStreak:0,combo:1};
+  const touchScore=design.personalTouches*100,touchCoins=design.personalTouches*5,rarity=design.rarity;
+  const ordinary=([0,35,50,60][fit]+RARITY_BONUS[rarity]+SHOP_BONUS[gameState.shopLevel]+speed.coinBonus)*(gameState.rareNextSale?2:1);
+  const coins=Math.max(0,Math.round(ordinary*(speed.name==='LATE'?.5:1)))+touchCoins;
+  const runway=fit===3&&speed.name==='EXPRESS'&&rarity==='LEGENDARY';
+  const score=Math.round((BRIEF_REWARDS[fit]+order.styleTips)*speed.multiplier*order.difficultyMultiplier*combo)+touchScore+RARITY_SCORE_BONUS[rarity]+(design.craftBonus||0)+(runway?500:0);
+  return {accepted:true,speed,score,coins,time:speed.timeBonus,nextStreak,combo,runway,touchScore,touchCoins};
 }
-function saleReaction(grade){return grade==='LATE'?'idle':'celebrate';}
+function saleReaction(fit,grade){return fit===0?'angry':grade==='LATE'?'angry':grade==='CUTTING IT CLOSE'||fit===1?'idle':'celebrate';}
 function availableUpgrades(){return [{type:'bag',cost:BAG_COST[gameState.bagLevel+1],available:gameState.bagLevel<3},{type:'shop',cost:SHOP_COST[gameState.shopLevel+1],available:gameState.shopLevel<3},{type:'worker',cost:100,available:!gameState.workerOwned}].filter(item=>item.available).sort((a,b)=>a.cost-b.cost);}
 function upgradeState(){const next=availableUpgrades()[0];return {next,affordable:Boolean(next&&gameState.coins>=next.cost)};}
 function continueSale(visitShop=false){
@@ -2660,11 +2772,13 @@ function continueSale(visitShop=false){
   gameState.shopObjective=visitShop;updateControlVisibility();syncPlatformGameplay();updateHUD();
   if(!visitShop)generateOrderOffers();
 }
-function showSaleResults(result){
-  const stack=document.querySelector('#sale-results'),design=result.design;stack.className='sale-results';
-  stack.innerHTML='<strong class="sale-hero">'+result.customerName.toUpperCase()+'’S NEW OUTFIT!</strong><svg class="sale-outfit" viewBox="'+garmentViewBox(design.garmentType)+'" aria-label="Your finished outfit">'+garmentSpecMarkup(deriveGarmentVisualSpec(design),'sale')+'</svg><div class="result-line" data-step="0"><span>STITCH</span><b>'+design.craftRating+'</b></div><div class="result-line" data-step="1"><span>DELIVERY</span><b>'+result.speed.name+'</b></div><div class="result-line" data-step="2"><span>RARITY</span><b>'+design.rarity+'</b></div><div class="result-totals" data-step="3"><b data-total="time">0 SEC</b><b data-total="score">0 SCORE</b><b data-total="coins">0 COINS</b></div>';
+function showSaleResults(result) {
+  const stack=document.querySelector('#sale-results'),profile=CUSTOMER_STYLE_PROFILES[result.customerId],design=result.design;
+  stack.className=`sale-results verdict-${design.briefFit}${result.runway?' runway-results':''}`;
+  stack.innerHTML=`<strong class="sale-hero">${result.customerName.toUpperCase()} · ${briefVerdict(design.briefFit)}</strong><div class="brief-explanation"><p>${profile.styleTag} ${design.styleMatches.length?'✓':'○'} ${design.styleMatches.slice(0,3).join(' · ')||'No combination for this trait'}</p><p>${profile.paletteTag} ${design.paletteMatches.length?'✓':'○'} ${design.paletteMatches.slice(0,1).join(' · ')||'No colour pair for this mood'}</p>${personalTouchText(result.customerId)?`<p>PERSONAL TOUCH ${design.touchMatches.length?'✓':'○'} ${design.touchMatches.join(' · ')||'None'}<small>+${result.touchScore} SCORE · +${result.touchCoins} COINS</small></p>`:''}</div><div class="result-line" data-step="0"><span>CRAFT</span><b>${design.craftRating}</b></div><div class="result-line" data-step="1"><span>DELIVERY</span><b>${result.speed.name==='LATE'?'LATE DELIVERY':result.speed.name}</b></div><div class="result-line" data-step="2"><span>RARITY</span><b>${design.rarity}</b></div><div class="result-line" data-step="3"><span>HUSTLE</span><b>+${result.styleTips}</b></div><div class="result-line" data-step="4"><span>COMBO</span><b>×${result.combo.toFixed(2)}</b></div>${result.runway?'<p>RUNWAY MOMENT · +500 SCORE</p>':''}<div class="result-totals" data-step="5"><b data-total="time">0 SEC</b><b data-total="score">0 SCORE</b><b data-total="coins">0 COINS</b></div>`;
   hudCountup={start:gameNow(),duration:550,from:result.previous,to:result.totals,display:{...result.previous},gains:{time:result.timeAwarded,score:result.score,coins:result.coins},stack};
-  document.querySelector('#visit-shop').classList.toggle('hidden',!upgradeState().affordable||gameState.practice);openModal('results');document.querySelector('#next-job').focus();
+  document.querySelector('#visit-shop').classList.toggle('hidden',!upgradeState().affordable||gameState.practice);openModal('results');
+  document.querySelector('#next-job').focus();
 }
 function updateSaleCountup(now) {
   if(!hudCountup)return;
@@ -2687,41 +2801,56 @@ function updateSaleCountup(now) {
   if(elapsed>=hudCountup.duration){hudCountup=null;updateHUD();}
 }
 function sellToCustomer(customer) {
-  if (simulationSuspended() || gameState.gameOver || !gameState.started || gameState.timeRemaining<=0 || !gameState.hasFinishedDesign || !gameState.finishedDesign || !customer.atDestination || customer.resumeAt  || offerInProgress) return;
+  if (simulationSuspended() || gameState.gameOver || !gameState.started || gameState.timeRemaining<=0 || !gameState.hasFinishedDesign || !gameState.finishedDesign || !customer.atDestination || customer.resumeAt || customer.fumingUntil || offerInProgress) return;
   offerInProgress=customer; customer.inspectUntil=gameNow()+550; customer.sellingPaused=true; setPrompt(null);
   const generation=runGeneration;
   setGameTimeout(()=>{if(generation===runGeneration)resolveCustomerOffer(customer);},550);
 }
 function resolveCustomerOffer(customer) {
-  if(simulationSuspended()||gameState.gameOver||gameState.timeRemaining<=0||!gameState.started||offerInProgress!==customer||!gameState.finishedDesign||gameState.activeOrder?.customerId!==customer.id)return;
+  if(simulationSuspended()||gameState.gameOver||!gameState.started||offerInProgress!==customer||!gameState.finishedDesign||gameState.activeOrder?.customerId!==customer.id)return;
   const order=gameState.activeOrder,design=gameState.finishedDesign,now=gameNow();
-  const rewards=calculateSaleRewards(design,order);if(!rewards){offerInProgress=null;customer.inspectUntil=0;return;}
+  Object.assign(design,calculateBriefFit(design,customer.id));const rewards=calculateSaleRewards(design,order);
   customer.inspectUntil=0;offerInProgress=null;
-  const previous={coins:gameState.coins,time:gameState.timeRemaining,score:gameState.score};
-  gameState.coins+=rewards.coins;gameState.score+=rewards.score;gameState.timeRemaining=THREE.MathUtils.clamp(gameState.timeRemaining+rewards.time,0,MAX_ARCADE_TIME);
-  gameState.streak=rewards.nextStreak;gameState.bestCombo=Math.max(gameState.bestCombo,gameState.streak);gameState.stats.sales++;
-  if(design.craftBonus===250)gameState.stats.perfectStitches++;if(design.rarity==='LEGENDARY')gameState.stats.legendaryDesigns++;
-  recordShowcaseSale(design);gameState.previousCustomerId=customer.id;gameState.previousDestinationId=order.destinationId;gameState.activeOrder=null;gameState.nextOffersAt=0;
-  gameState.hasFinishedDesign=false;gameState.finishedDesign=null;gameState.rareNextSale=false;clearCarriedDesign();
-  salePauseUntil=now+550;saleCelebrationCustomer=customer;customer.sellingPaused=true;customer.reactionUntil=now+1500;customer.resumeAt=now+2200;
-  const reaction=saleReaction(rewards.speed.name),action=customer.animation.actions[reaction];
-  if(action&&reaction!=='idle'){action.setLoop(THREE.LoopOnce,1);action.clampWhenFinished=true;}customer.animation.play(reaction);
-  const deliveryCopy=rewards.speed.name==='LATE'?'You’re late!':rewards.speed.name==='CUTTING IT CLOSE'?'Just in time…':rewards.speed.name==='EXPRESS'?'So quick!':'';
-  showCustomerSpeech(customer,`${deliveryCopy}${reaction==='celebrate'&&customer.line?' '+customer.line:''}`,2200);
-  const point=customer.wrapper.position.clone().add(new THREE.Vector3(0,.7,0)),ecstatic=design.craftBonus===250&&rewards.speed.name==='EXPRESS';
-  if(reaction==='celebrate'){burst(point,ecstatic?24:10,C.coral,'heart',.95);if(ecstatic)createPerfectRing(customer.wrapper.position);}else burst(point,3,C.cream,'sphere',.55);
-  if(design.rarity==='LEGENDARY')burst(point,16,C.gold,'confetti',1);
-  triggerTownEvents(order.destinationId);if(rewards.runway)cameraCelebration={customer,start:now,duration:700};
-  playSound(ecstatic?'perfect':'sell');pulse('coin-stat');
-  if(gameState.practice)gameState.practiceFinishing=true;
-  showSaleResults({...rewards,customerId:customer.id,customerName:customer.name,design,previous,totals:{coins:gameState.coins,time:gameState.timeRemaining,score:gameState.score},timeAwarded:gameState.timeRemaining-previous.time});
+  if(rewards.accepted){
+    const previous={coins:gameState.coins,time:gameState.timeRemaining,score:gameState.score};
+    gameState.coins+=rewards.coins;gameState.score+=rewards.score;gameState.timeRemaining=THREE.MathUtils.clamp(gameState.timeRemaining+rewards.time,0,MAX_ARCADE_TIME);
+    gameState.streak=rewards.nextStreak;gameState.bestCombo=Math.max(gameState.bestCombo,gameState.streak);gameState.stats.sales++;
+    if(design.briefFit===3)gameState.stats.perfectMatches++;if(design.rarity==='LEGENDARY')gameState.stats.legendaryDesigns++;
+    recordShowcaseSale(design);gameState.previousCustomerId=customer.id;gameState.previousDestinationId=order.destinationId;gameState.activeOrder=null;gameState.nextOffersAt=0;
+    gameState.hasFinishedDesign=false;gameState.designRejected=false;gameState.finishedDesign=null;gameState.rareNextSale=false;clearCarriedDesign();
+    salePauseUntil=now+550;saleCelebrationCustomer=customer;customer.sellingPaused=true;customer.reactionUntil=now+1500;customer.resumeAt=now+2200;
+    const reaction=saleReaction(design.briefFit,rewards.speed.name),action=customer.animation.actions[reaction];
+    if(action&&reaction!=='idle'){action.setLoop(THREE.LoopOnce,1);action.clampWhenFinished=true;}customer.animation.play(reaction);
+    customer.annoyance=rewards.speed.name==='LATE'?Math.min(4,customer.annoyance+1):Math.max(0,customer.annoyance-1);
+    const deliveryCopy=rewards.speed.name==='LATE'?'You’re late!':rewards.speed.name==='CUTTING IT CLOSE'?'Just in time…':rewards.speed.name==='EXPRESS'?'So quick!':'';
+    showCustomerSpeech(customer,`${briefVerdict(design.briefFit)} ${deliveryCopy}${reaction==='celebrate'&&customer.line?' '+customer.line:''}`,2200);
+    const point=customer.wrapper.position.clone().add(new THREE.Vector3(0,.7,0)),ecstatic=design.briefFit===3&&rewards.speed.name==='EXPRESS';
+    if(reaction==='celebrate'){burst(point,ecstatic?24:10,C.coral,'heart',.95);if(ecstatic)createPerfectRing(customer.wrapper.position);}else burst(point,3,reaction==='angry'?C.urgent:C.cream,'sphere',.55);
+    if(reaction!=='angry'&&design.rarity==='LEGENDARY')burst(point,16,C.gold,'confetti',1);
+    triggerTownEvents(order.destinationId);if(rewards.runway)cameraCelebration={customer,start:now,duration:700};
+    playSound(reaction==='angry'?'fail':ecstatic?'perfect':'sell');pulse('coin-stat');
+    if(gameState.practice)gameState.practiceFinishing=true;
+    showSaleResults({...rewards,customerId:customer.id,customerName:customer.name,design,styleTips:order.styleTips,previous,totals:{coins:gameState.coins,time:gameState.timeRemaining,score:gameState.score},timeAwarded:gameState.timeRemaining-previous.time});
+  }else{
+    gameState.timeRemaining=Math.max(0,gameState.timeRemaining-6);gameState.streak=0;gameState.designRejected=true;
+    if(!customer.countedAnnoyed){customer.countedAnnoyed=true;gameState.stats.customersAnnoyed++;}
+    customer.annoyance=Math.min(4,customer.annoyance+2);customer.annoyanceVisibleUntil=now+1900;customer.reactionUntil=now+1100;customer.sellingPaused=false;customer.rejectionCount++;
+    const action=customer.animation.actions.angry;if(action){action.setLoop(THREE.LoopOnce,1);action.clampWhenFinished=true;}customer.animation.play('angry');
+    showCustomerSpeech(customer,`NOT MY VIBE. I’m after ${customerStyleText(customer.id)}.`);popup('NOT MY VIBE · −6 SEC','fail');playSound('fail');
+    toast('Take this look to any counter. Keep pieces free; exchange only what you change.');
+    if(customer.annoyance>=3){customer.fumingUntil=now+6000;customer.chaseUntil=now+4000;customer.goAwayShown=false;}
+    showRejectedVerdict(design,customer);
+  }
   customers.forEach(refreshCustomerBubble);updateHUD();updateInteractions(now);if(!gameState.practice&&gameState.timeRemaining<=0)endRun();
+}
+function showRejectedVerdict(design,customer){
+  const profile=CUSTOMER_STYLE_PROFILES[customer.id];toast(`NOT MY VIBE · ${profile.styleTag}: ${design.styleMatches.join(' · ')||'no combination for this trait'} · ${profile.paletteTag}: ${design.paletteMatches.slice(0,1).join(' · ')||'no colour pair for this mood'} · REWORK AT ANY COUNTER`);
 }
 
 // 15. shop and upgrades
 
 function orderCardsMarkup() {
-  return gameState.orderOffers.map(offer=>{const customer=customers.find(item=>item.id===offer.customerId),destination=DISTRICTS.find(item=>item.id===offer.destinationId);return `<article class="shop-order-card ${offer.difficultyClass}"><small class="order-tier">${offer.difficulty} · SCORE ×${offer.difficultyMultiplier.toFixed(1)}</small>${customerPortraitMarkup(customer)}<strong>${customer.name}</strong><b>${destination.name}</b><span>${readyCategoryCount()}/4 outfit pieces ready · ~${offer.estimatedTravelSeconds}s walking</span><strong class="order-deadline">${offer.deadlineSeconds}s DEADLINE</strong><button class="primary" data-accept-order="${offer.customerId}">CHOOSE ${offer.difficulty}</button></article>`;}).join('')||'<p class="orders-pending">Choose NEXT OUTFIT after your sale.</p>';
+  return gameState.orderOffers.map(offer=>{const customer=customers.find(item=>item.id===offer.customerId),destination=DISTRICTS.find(item=>item.id===offer.destinationId);return `<article class="shop-order-card ${offer.difficultyClass}"><small class="order-tier">${offer.difficulty} · SCORE ×${offer.difficultyMultiplier.toFixed(1)}</small>${customerPortraitMarkup(customer)}<strong>${customer.name}</strong>${briefMarkup(customer.id)}<b>${destination.name}</b><span>${readyCategoryCount()} categories ready · ~${offer.estimatedTravelSeconds}s walking</span><strong class="order-deadline">${offer.deadlineSeconds}s DEADLINE</strong><button class="primary" data-accept-order="${offer.customerId}">CHOOSE ${offer.difficulty}</button></article>`;}).join('')||'<p class="orders-pending">Choose NEXT JOB after your sale.</p>';
 }
 function renderOrderBoard(){document.querySelector('#order-board-items').innerHTML=orderCardsMarkup();}
 function openOrderBoard(){
@@ -2730,20 +2859,20 @@ function openOrderBoard(){
 }
 function choicesPauseClocks(){return ['design','orders','bag','shop','results','details'].includes(gameState.modalOpen);}
 function renderShopOrders(){
-  const container=document.querySelector('#shop-order-items');if(gameState.activeOrder){const customer=targetCustomer(),order=gameState.activeOrder;container.innerHTML=`<article class="shop-order-card active-order"><small>ACTIVE ORDER · ${order.difficulty} · SCORE ×${order.difficultyMultiplier}</small>${customerPortraitMarkup(customer)}<strong>${customer.name}</strong><b>→ ${DISTRICTS.find(item=>item.id===order.destinationId).name}</b><span>${order.deadlineSeconds}s deadline</span></article>`;}else container.innerHTML=orderCardsMarkup();
+  const container=document.querySelector('#shop-order-items');if(gameState.activeOrder){const customer=targetCustomer(),order=gameState.activeOrder;container.innerHTML=`<article class="shop-order-card active-order"><small>ACTIVE ORDER · ${order.difficulty} · SCORE ×${order.difficultyMultiplier}</small>${customerPortraitMarkup(customer)}<strong>${customer.name}</strong>${briefMarkup(customer.id)}<b>→ ${DISTRICTS.find(item=>item.id===order.destinationId).name}</b><span>${order.deadlineSeconds}s deadline</span></article>`;}else container.innerHTML=orderCardsMarkup();
 }
 function totalStockroom(){return Object.values(gameState.stockroom).reduce((total,category)=>total+Object.values(category).reduce((sum,count)=>sum+count,0),0);}
 function renderStockroom(){
   const rows=[];
   Object.entries(gameState.inventory).forEach(([category,types])=>Object.keys(types).forEach(type=>{
     const bagCount=gameState.inventory[category][type],stockCount=gameState.stockroom[category][type];
-    rows.push(`<div class="stockroom-row"><strong>${itemName(type)} <small>${CATEGORY_LABELS[category]}</small></strong><span>BAG ×${bagCount}</span><button data-transfer="store" data-category="${category}" data-type="${type}" ${bagCount<1||totalStockroom()>=STOCKROOM_CAPACITY?'disabled':''}>STORE →</button><span>STOCK ×${stockCount}</span><button data-transfer="retrieve" data-category="${category}" data-type="${type}" ${stockCount<1||totalMaterials()>=gameState.bagCapacity?'disabled':''}>← TAKE</button></div>`);
+    rows.push(`<div class="stockroom-row"><strong>${type} <small>${CATEGORY_LABELS[category]}</small></strong><span>BAG ×${bagCount}</span><button data-transfer="store" data-category="${category}" data-type="${type}" ${bagCount<1||totalStockroom()>=STOCKROOM_CAPACITY?'disabled':''}>STORE →</button><span>STOCK ×${stockCount}</span><button data-transfer="retrieve" data-category="${category}" data-type="${type}" ${stockCount<1||totalMaterials()>=gameState.bagCapacity?'disabled':''}>← TAKE</button></div>`);
   }));
   document.querySelector('#stockroom-usage').textContent=`${totalStockroom()} / ${STOCKROOM_CAPACITY}`;
   document.querySelector('#stockroom-items').innerHTML=rows.join('');
 }
 function renderShowcaseItems(){
-  document.querySelector('#showcase-items').innerHTML=Array.from({length:3},(_,index)=>{const entry=gameState.showcase[index];if(!entry)return '<article class="showcase-card empty"><strong>EMPTY MANNEQUIN</strong><span>Sell a look to fill this plinth.</span></article>';const design=entry.design;return `<article class="showcase-card"><div class="showcase-icon">${requestSymbol(design.motif)}</div><strong>${design.rarity}</strong><span>${design.name}</span><span>${design.craftRating}</span><span>${itemName(design.trim)}</span></article>`;}).join('');
+  document.querySelector('#showcase-items').innerHTML=Array.from({length:3},(_,index)=>{const entry=gameState.showcase[index];if(!entry)return '<article class="showcase-card empty"><strong>EMPTY MANNEQUIN</strong><span>Sell a look to fill this plinth.</span></article>';const design=entry.design;return `<article class="showcase-card"><div class="showcase-icon">${requestSymbol(design.motif)}</div><strong>${design.rarity}</strong><span>${design.name}</span><span>${briefVerdict(entry.briefFit)}</span><span>${design.trim}</span></article>`;}).join('');
 }
 function renderShop(){
   document.querySelectorAll('[data-shop-tab]').forEach(button=>button.classList.toggle('active',button.dataset.shopTab===gameState.shopTab));
@@ -2759,11 +2888,11 @@ function transferStockroom(direction,category,type){
     if(gameState.stockroom[category]?.[type]<1||totalMaterials()>=gameState.bagCapacity)return;
     gameState.stockroom[category][type]--;gameState.inventory[category][type]++;collectionHistory.push(componentId(category,type));
   }
-  syncOutfitSelections();playSound('pickup');updateHUD();renderShop();
+  playSound('pickup');updateHUD();renderShop();
 }
 function recordShowcaseSale(design){
-  gameState.showcase.push({design:{...design},sequence:++gameState.showcaseSequence});
-  gameState.showcase.sort((a,b)=>RARITY_RANK[b.design.rarity]-RARITY_RANK[a.design.rarity]||(b.design.craftBonus||0)-(a.design.craftBonus||0)||b.sequence-a.sequence);gameState.showcase=gameState.showcase.slice(0,3);refreshWorldShowcase();
+  gameState.showcase.push({design:{...design,...copyDesignComposition(design)},briefFit:design.briefFit,sequence:++gameState.showcaseSequence});
+  gameState.showcase.sort((a,b)=>RARITY_RANK[b.design.rarity]-RARITY_RANK[a.design.rarity]||b.briefFit-a.briefFit||b.sequence-a.sequence);gameState.showcase=gameState.showcase.slice(0,3);refreshWorldShowcase();
 }
 
 function renderUpgradeCards() {
@@ -2990,13 +3119,18 @@ function navigationTarget() {
     const customer=customers.find(item=>item.id===gameState.practiceOffer?.customerId);
     return customer?{id:customer.id,point:customer.wrapper.position,label:`MEET ${customer.name.toUpperCase()}`,kind:'customer'}:null;
   }
-  if(gameState.hasFinishedDesign){
+  if(gameState.hasFinishedDesign&&!gameState.designRejected){
     const customer=targetCustomer();
     if(!customer)return null;
-    const ready=customer.atDestination&&!customer.resumeAt&&!customer.inspectUntil&&gameNow()>=customer.reactionUntil;
+    const ready=customer.atDestination&&!customer.fumingUntil&&!customer.resumeAt&&!customer.inspectUntil&&gameNow()>=customer.reactionUntil;
     return {id:customer.id,point:customer.wrapper.position,label:`${ready?'SELL TO':'FIND'} ${customer.name.toUpperCase()}`,kind:'customer'};
   }
+  if(gameState.designRejected&&gameState.finishedDesign){
+    const counter=selectedCounter||(selectedCounter=nearestCraftingCounter());
+    return {id:counter.id,point:counter.point,label:'REWORK YOUR LOOK',kind:'counter',name:counter.name};
+  }
   const missing=MATERIAL_CATEGORIES.some(category=>categoryTotal(category)===0);
+  if(missing&&!detailedMaterialGuidance())return null;
   const pickup=missing?missingTargetComponent():null;
   if(pickup){selectedCounter=null;return {id:pickups.indexOf(pickup),point:pickup.anchor,label:`${pickup.active?'TAKE':'WAIT FOR'} ${pickupLabelText(pickup)}`,kind:'pickup',name:pickup.landmark};}
   const counter=selectedCounter||(selectedCounter=nearestCraftingCounter());
@@ -3008,44 +3142,48 @@ function objectiveText() {
 let guidance={stage:null,progress:null,at:0,reminded:new Set()};
 function currentObjective(){
   const action=touchDevice?'Tap INTERACT':'Press E',customer=targetCustomer(),name=customer?.name.toUpperCase()||'YOUR CUSTOMER';
-  if(gameState.practiceFinishing)return {stage:'next',goal:'DELIVERED! START YOUR RUN',help:'Choose NEXT OUTFIT to start your scored run.'};
-  if(gameState.modalOpen==='results')return {stage:'next',goal:'MAKE ANOTHER OUTFIT',help:'Choose NEXT OUTFIT to keep creating.'};
+  if(gameState.practiceFinishing)return {stage:'next',goal:'DELIVERED! START YOUR RUN',help:'Choose NEXT JOB to start your scored run.'};
+  if(gameState.modalOpen==='results')return {stage:'next',goal:'PICK YOUR NEXT ORDER',help:'Choose NEXT JOB to keep designing.'};
   if(gameState.modalOpen==='design'){
     if(craftChallenge)return {stage:'stitch',goal:'STOP IN THE GREEN CENTRE',help:touchDevice?'Tap the timing bar to stop.':'Press SPACE or click the timing bar to stop.'};
-    if(gameState.hasFinishedDesign)return {stage:'take',goal:'TAKE YOUR LOOK',help:'Choose TAKE LOOK, then follow the arrow to your customer.'};
-    return {stage:'design',goal:`CREATE ${name}’S LOOK`,help:'Your choices are ready! Change anything you like, then MAKE IT!'};
+    if(gameState.hasFinishedDesign&&!gameState.designRejected)return {stage:'take',goal:'TAKE YOUR LOOK',help:'Choose TAKE LOOK, then follow the arrow to your customer.'};
+    return {stage:'design',goal:`CREATE ${name}’S LOOK`,help:'Choose your materials. CUT changes the shape; ACCENT adds a second colour. Then MAKE IT!'};
   }
   if(gameState.shopObjective)return {stage:'shop',goal:'VISIT MY SHOP',help:'Follow the arrow for upgrades.'};
   if(!gameState.activeOrder)return {stage:'order',goal:gameState.practice?'MEET YOUR FIRST CUSTOMER':'PICK YOUR NEXT ORDER',help:gameState.practice?`${action} near the highlighted customer to accept.`:'Choose an order from ORDERS.'};
+  if(gameState.designRejected)return {stage:'rework',goal:'REWORK AT A DESIGN STUDIO',help:'Follow the arrow. Keep pieces free; collect only the replacements you want.'};
   if(gameState.hasFinishedDesign)return {stage:'deliver',goal:`DELIVER TO ${name}`,help:`Follow the arrow to ${name}. ${action} beside them to sell.`};
   if(readyCategoryCount()<4){
     const missing=MATERIAL_CATEGORIES.filter(c=>!categoryTotal(c));
-    return {stage:'collect',goal:`MAKE AN OUTFIT FOR ${name}!`,help:!gameState.moved?(touchDevice?'Move with the joystick. Follow the arrow.':'Move with WASD or arrow keys. Follow the arrow.'):`Walk over things you like · need ${missing.map(c=>CATEGORY_LABELS[c]).join(', ')}.`};
+    return {stage:'collect',goal:`COLLECT 4 MATERIALS · ${readyCategoryCount()}/4`,help:!gameState.moved?(touchDevice?'Move with the joystick. Follow the arrow.':'Move with WASD or arrow keys. Follow the arrow.'):`${touchDevice?'Tap a nearby item or INTERACT':'Press E or click a nearby item'} · need ${missing.map(c=>CATEGORY_LABELS[c]).join(', ')}.`};
   }
   return {stage:'studio',goal:'GO TO A DESIGN STUDIO',help:`You’ve got all four! Follow the arrow. ${action} at the counter.`};
 }
-function updateCollectionHUD(){
-  const panel=document.querySelector('#collection-hud'),components=document.querySelector('#target-components');
-  const collecting=gameState.started&&!gameState.gameOver&&gameState.activeOrder&&!gameState.hasFinishedDesign&&!gameState.modalOpen;
-  panel.hidden=!collecting;if(!collecting)return;syncOutfitSelections();
-  const markup=MATERIAL_CATEGORIES.map(category=>{const type=gameState[MATERIAL_FIELDS[category]],owned=categoryTotal(category)>0;
-    return '<div data-slot="'+category+'" class="outfit-slot '+(owned?'owned':'')+'" aria-label="'+CATEGORY_LABELS[category]+': '+(owned?itemName(type):'choose one')+'"><span class="slot-heading">'+CATEGORY_LABELS[category]+'</span><span class="slot-picture">'+materialPicture(category,owned?type:null)+'</span><span class="slot-item">'+(owned?'✓ '+itemName(type):'CHOOSE ONE')+'</span></div>';
+function updateCollectionHUD() {
+  const components=document.querySelector('#target-components');
+  const collecting=Boolean(gameState.started&&!gameState.gameOver&&gameState.activeOrder&&!gameState.hasFinishedDesign&&!gameState.modalOpen);
+  document.querySelector('#collection-hud').hidden=!collecting;
+  if(!collecting)return;
+  const markup=MATERIAL_CATEGORIES.map(category=>{
+    const count=categoryTotal(category);
+    return `<span class="${count>0?'owned':''}" aria-label="${CATEGORY_LABELS[category]}: ${count} collected, 1 required"><b>${count>0?'✓':'○'}</b>${categoryIcon(category)}${CATEGORY_LABELS[category]}</span>`;
   }).join('');
-  if(components.dataset.choices!==markup){components.innerHTML=markup;components.dataset.choices=markup;}
-  document.querySelector('#collection-count').textContent=readyCategoryCount()+'/4 READY';
+  if(components.innerHTML!==markup)components.innerHTML=markup;
+  document.querySelector('#collection-count').textContent=`${readyCategoryCount()} OF 4 COLLECTED`;
 }
 function updateHUD() {
   document.querySelector('#coins-value').textContent = hudCountup?.display.coins??gameState.coins;
   document.querySelector('#capacity-value').textContent = `${totalMaterials()}/${gameState.bagCapacity}`;
-  document.querySelector('#materials-value').innerHTML = `<span title="Clothes">${iconMarkup('dress')}×${categoryTotal('garments')}</span><span title="Colour"><i class="material-dot"></i>×${categoryTotal('dyes')}</span><span title="Sticker">${iconMarkup('star')}×${categoryTotal('motifs')}</span><span title="Decoration">${iconMarkup('bow')}×${categoryTotal('trims')}</span>`;
+  document.querySelector('#materials-value').innerHTML = `<span title="Garments">${iconMarkup('dress')}×${categoryTotal('garments')}</span><span title="Dyes"><i class="material-dot"></i>×${categoryTotal('dyes')}</span><span title="Patches">${iconMarkup('star')}×${categoryTotal('motifs')}</span><span title="Trims">${iconMarkup('bow')}×${categoryTotal('trims')}</span>`;
   const target = targetCustomer();
   document.querySelector('#orders-button').classList.toggle('hidden',Boolean(gameState.activeOrder)||gameState.practice);
   const targetCard=document.querySelector('#target-card');
-  targetCard.classList.toggle('hidden',!gameState.started||gameState.gameOver);
-  document.querySelector('#target-name').innerHTML=(target?customerPortraitMarkup(target):'')+'<strong>'+currentObjective().goal+'</strong>';
-  document.querySelector('#target-look').textContent='';
+  targetCard.classList.toggle('hidden',!target);
   if (target && gameState.activeOrder) {
+    document.querySelector('#collection-heading').textContent=gameState.hasFinishedDesign?'DELIVER YOUR LOOK':'BUILD YOUR LOOK';
+    document.querySelector('#target-name').textContent = target.name.toUpperCase();
     document.querySelector('#target-look').textContent = `→ ${DISTRICTS.find(item=>item.id===gameState.activeOrder.destinationId).name} · ${gameState.activeOrder.difficulty} ×${gameState.activeOrder.difficultyMultiplier}`;
+    document.querySelector('#target-style').innerHTML=briefMarkup(target.id);
   }
   updateCollectionHUD();
   document.querySelectorAll('.shop-sign').forEach(sign=>sign.classList.toggle('shop-targeted',gameState.shopObjective));
@@ -3055,6 +3193,7 @@ function updateHUD() {
   updateCompactHUD();
   const objective = objectiveText();
   if (objective !== lastObjective) {
+    document.querySelector('#objective-card').textContent=objective;
     lastObjective = objective;
   }
   updateObjectiveMarker();
@@ -3062,16 +3201,16 @@ function updateHUD() {
 
 function readHighScores() {
   try {
-    const value=JSON.parse(readSaved('makeYourDesignHighScoresV5')||'[]');
-    return Array.isArray(value)?value.filter(entry=>entry&&['score','sales','perfectStitches','bestCombo','timestamp'].every(key=>Number.isSafeInteger(entry[key])&&entry[key]>=0)).sort((a,b)=>b.score-a.score||a.timestamp-b.timestamp).slice(0,5):[];
+    const value=JSON.parse(readSaved('makeYourDesignHighScoresV4')||'[]');
+    return Array.isArray(value)?value.filter(entry=>entry&&['score','sales','perfectMatches','bestCombo','timestamp'].every(key=>Number.isSafeInteger(entry[key])&&entry[key]>=0)).sort((a,b)=>b.score-a.score||a.timestamp-b.timestamp).slice(0,5):[];
   } catch { return []; }
 }
 function storeHighScore() {
   if(gameState.practice)return {scores:readHighScores(),currentTimestamp:null,entered:false};
-  const entry={score:gameState.score,sales:gameState.stats.sales,perfectStitches:gameState.stats.perfectStitches,bestCombo:gameState.bestCombo,timestamp:Date.now()};
+  const entry={score:gameState.score,sales:gameState.stats.sales,perfectMatches:gameState.stats.perfectMatches,bestCombo:gameState.bestCombo,timestamp:Date.now()};
   const previousScores=readHighScores(),previousBest=previousScores[0]?.score??null;
   const scores=[...previousScores,entry].sort((a,b)=>b.score-a.score||a.timestamp-b.timestamp).slice(0,5);
-  writeSaved('makeYourDesignHighScoresV5',JSON.stringify(scores));
+  writeSaved('makeYourDesignHighScoresV4',JSON.stringify(scores));
   return {scores,currentTimestamp:entry.timestamp,entered:scores.some(item=>item.timestamp===entry.timestamp),previousBest};
 }
 function renderBestScore() {
@@ -3083,8 +3222,8 @@ function renderGameOver(board) {
   const comparison=board.previousBest===null?'FIRST SCORE!':difference>0?`NEW BEST! +${difference.toLocaleString()} improvement`:difference===0?'MATCHED YOUR BEST':`${(-difference).toLocaleString()} below your best`;
   document.querySelector('#best-comparison').textContent=`PERSONAL BEST ${best.toLocaleString()} · ${comparison}. Next target: ${(best+1).toLocaleString()}`;
   if(platform.storageFailed)document.querySelector('#best-comparison').textContent+=' · Saving unavailable: scores kept for this session.';
-  document.querySelector('#final-stats').innerHTML=`<span>DESIGNS SOLD<b>${gameState.stats.sales}</b></span><span>PERFECT STITCHES<b>${gameState.stats.perfectStitches}</b></span><span>BEST COMBO<b>${gameState.bestCombo}</b></span><span>LEGENDARY DESIGNS<b>${gameState.stats.legendaryDesigns}</b></span>`;
-  document.querySelector('#high-score-list').innerHTML=board.scores.map((entry,index)=>`<div class="high-score-row ${entry.timestamp===board.currentTimestamp&&board.entered?'new-score':''}"><strong>#${index+1} &nbsp; ${entry.score.toLocaleString()}</strong><span>${entry.sales} sales • ${entry.perfectStitches} perfect stitches</span>${entry.timestamp===board.currentTimestamp&&board.entered?'<b>NEW!</b>':''}</div>`).join('')||'<p>No scores yet</p>';
+  document.querySelector('#final-stats').innerHTML=`<span>DESIGNS SOLD<b>${gameState.stats.sales}</b></span><span>NAILED IT LOOKS<b>${gameState.stats.perfectMatches}</b></span><span>BEST COMBO<b>${gameState.bestCombo}</b></span><span>LEGENDARY DESIGNS<b>${gameState.stats.legendaryDesigns}</b></span><span>CUSTOMERS ANNOYED<b>${gameState.stats.customersAnnoyed}</b></span>`;
+  document.querySelector('#high-score-list').innerHTML=board.scores.map((entry,index)=>`<div class="high-score-row ${entry.timestamp===board.currentTimestamp&&board.entered?'new-score':''}"><strong>#${index+1} &nbsp; ${entry.score.toLocaleString()}</strong><span>${entry.sales} sales • ${entry.perfectMatches} nailed it</span>${entry.timestamp===board.currentTimestamp&&board.entered?'<b>NEW!</b>':''}</div>`).join('')||'<p>No scores yet</p>';
 }
 function endRun() {
   if(gameState.practice)return;
@@ -3127,29 +3266,33 @@ function updateObjectiveMarker() {
   objectiveMarker.position.copy(target.point).setY(target.kind==='customer'?2.45:target.kind==='pickup'?1.9:3.1);
   if(customerTargetRing){customerTargetRing.visible=target.kind==='customer'&&!gameState.modalOpen;customerTargetRing.position.copy(target.point).setY(.04);}
 }
-function setPrompt(label,pickup=null){
-  const prompt=document.querySelector('#interaction-prompt'),button=document.querySelector('#context-action');
-  const visible=Boolean(label)&&!simulationSuspended()&&!gameState.modalOpen&&gameState.started&&!gameState.gameOver;
-  interactionLabel.visible=visible;prompt.classList.toggle('visible',visible);canvas.style.cursor='';if(!visible)return;
-  const text=button.querySelector('span');if(text.textContent!==label)text.textContent=label;
-  const pointerAction=Boolean(activeInteraction?.pointerOnly);
-  button.disabled=Boolean(pickup)&&!pointerAction;button.querySelector('kbd').hidden=Boolean(pickup)&&!pointerAction;button.querySelector('kbd').textContent=touchDevice?'TAP':pointerAction?'CLICK':'E';
-  let point=pickup?.anchor||activeInteraction?.customer?.wrapper.position||activeInteraction?.dumpster?.point;
-  if(!point&&activeInteraction?.type==='studio')point=nearestCraftingCounter().point;
-  if(!point&&activeInteraction?.type==='accept-order')point=customers.find(c=>c.id===activeInteraction.offer.customerId)?.wrapper.position;
-  if(!point&&activeInteraction?.type==='shop')point=SHOP_POINT;
+function setPrompt(label) {
+  const prompt = document.querySelector('#interaction-prompt');
+  prompt.querySelector('span').textContent = label || '';
+  prompt.classList.toggle('visible', Boolean(label));
+  interactionLabel.visible=Boolean(label);
+  if(!label){canvas.style.cursor='';return;}
+  const interaction=activeInteraction,pickup=interaction?.pickup||interaction?.drop,isPickup=Boolean(pickup),full=isPickup&&totalMaterials()>=gameState.bagCapacity;
+  prompt.querySelector('kbd').textContent=isPickup?(full?(touchDevice?'BAG / DROP':'B / Q'):touchDevice?'TAP':'E / CLICK'):(touchDevice?'INTERACT':'E');
+  prompt.querySelector('strong').textContent=isPickup?(full?'BAG FULL':teachingCollection()&&!guidance.firstPickup?'PICK UP!':'PICK UP'):'';
+  let point=pickup?.anchor||pickup?.group.position||interaction?.customer?.wrapper.position||interaction?.dumpster?.point;
+  if(!point&&interaction?.type==='studio')point=nearestCraftingCounter().point;
+  if(!point&&interaction?.type==='accept-order')point=customers.find(c=>c.id===interaction.offer.customerId)?.wrapper.position;
+  if(!point&&interaction?.type==='shop')point=SHOP_POINT;
   interactionLabel.position.copy(point||player.position).y+=2.25;
   if(compactMode){
-    const width=prompt.offsetWidth||220,height=prompt.offsetHeight||48,projected=interactionLabel.position.clone().project(camera);
+    // Fit the single object label around the existing HUD, player and thumb areas.
+    const width=prompt.offsetWidth||220,height=prompt.offsetHeight||56,projected=interactionLabel.position.clone().project(camera);
     const x=(projected.x+1)*gameViewport.width/2,y=(1-projected.y)*gameViewport.height/2;
     const centre=player.position.clone().setY(player.position.y+1).project(camera),px=(centre.x+1)*gameViewport.width/2,py=(1-centre.y)*gameViewport.height/2;
-    const playerRect={left:px-35,right:px+35,top:py-25,bottom:py+35};
-    const obstacles=[playerRect,...['#phone-hud','#phone-timers',...(touchDevice?['#joystick','.touch-actions']:[])].map(selector=>document.querySelector(selector)).filter(el=>el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden').map(el=>{const r=el.getBoundingClientRect();return {left:r.left-gameViewport.left,right:r.right-gameViewport.left,top:r.top-gameViewport.top,bottom:r.bottom-gameViewport.top};})];
-    const sideY=Math.max(y,obstacles[1].bottom+height/2+6);
-    const candidates=[[x,y],[x,playerRect.top-height/2-6],[playerRect.left-width/2-6,sideY],[playerRect.right+width/2+6,sideY],[x,playerRect.bottom+height/2+6]];
-    const placement=candidates.find(([cx,cy])=>cx-width/2>=6&&cx+width/2<=gameViewport.width-6&&cy-height/2>=6&&cy+height/2<=gameViewport.height-6&&!obstacles.some(r=>cx-width/2<r.right&&cx+width/2>r.left&&cy-height/2<r.bottom&&cy+height/2>r.top));
+    const protectedPlayer={left:px-35,right:px+35,top:py-25,bottom:py+35};
+    const obstacles=[protectedPlayer,...['#phone-hud','#phone-timers',...(touchDevice?['#joystick','.touch-actions']:[])].map(selector=>document.querySelector(selector)).filter(el=>el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden').map(el=>{const r=el.getBoundingClientRect();return {left:r.left-gameViewport.left,right:r.right-gameViewport.left,top:r.top-gameViewport.top,bottom:r.bottom-gameViewport.top};})];
+    const sideY=Math.max(y,obstacles[1].bottom+height/2+8);
+    const candidates=[[x,y],[x,protectedPlayer.top-height/2-8],[protectedPlayer.left-width/2-8,sideY],[protectedPlayer.right+width/2+8,sideY],[x,protectedPlayer.bottom+height/2+8]];
+    const placement=candidates.find(([cx,cy])=>cx-width/2>=8&&cx+width/2<=gameViewport.width-8&&cy-height/2>=8&&cy+height/2<=gameViewport.height-8&&!obstacles.some(r=>cx-width/2<r.right&&cx+width/2>r.left&&cy-height/2<r.bottom&&cy+height/2>r.top));
     if(placement)interactionLabel.position.set(placement[0]/gameViewport.width*2-1,1-placement[1]/gameViewport.height*2,projected.z).unproject(camera);
   }
+  canvas.style.cursor=isPickup&&!full?'pointer':'';
 }
 function pulse(id) {
   const el = document.getElementById(id);
@@ -3263,21 +3406,29 @@ function toast(text) {
 }
 
 // 21. animation loop
-
+function updateCollectionClarity(){
+  const order=gameState.activeOrder;
+  if(!order||teachingCollection()||gameState.hasFinishedDesign||order.collectionPulseShown)return;
+  const missing=MATERIAL_CATEGORIES.filter(category=>categoryTotal(category)===0);
+  if(!missing.length||gameState.activePlayTime-(order.collectionProgressAt??gameState.activePlayTime)<6)return;
+  order.collectionPulseShown=true;
+  document.querySelectorAll('[data-supplier-category]').forEach(marker=>marker.classList.toggle('supplier-pulse',missing.includes(marker.dataset.supplierCategory)));
+}
 function updateFirstOrderHelp(){
   if(!gameState.started||gameState.gameOver||simulationSuspended()||!teachingCollection()||saleGameplayPaused()||!['design',null].includes(gameState.modalOpen))return;
   const objective=currentObjective(),progress=JSON.stringify([readyCategoryCount(),gameState.moved,currentDraft(),gameState.hasFinishedDesign]);
   if(guidance.stage!==objective.stage||guidance.progress!==progress){guidance.stage=objective.stage;guidance.progress=progress;guidance.at=gameNow();return;}
-  if(!['order','collect','studio','design','take','deliver'].includes(objective.stage)||guidance.reminded.has(objective.stage)||gameNow()-guidance.at<12000)return;
+  if(!['order','collect','studio','design','take','deliver','rework'].includes(objective.stage)||guidance.reminded.has(objective.stage)||gameNow()-guidance.at<12000)return;
   guidance.reminded.add(objective.stage);toast(objective.help);
-  if(objective.stage==='collect')selectedPickup=null;
+  if(objective.stage==='collect'){gameState.guideRemaining=10;selectedPickup=null;}
   if(objective.stage==='design')document.querySelector(`[data-design-tab="${gameState.activeOrder.designerCategory}"]`)?.animate([{background:'#fff9ef'},{background:'#ffe39b'},{background:'#fff9ef'}],{duration:700});
 }
 // The production frame and deterministic checks share movement/countdown ownership.
 function updateGameplayStep(rawDelta,inspectionWasPaused=false,updateWorld=()=>{}) {
   const dt=Math.min(Math.max(0,rawDelta),.05);
   if(simulationSuspended())return dt;
-  if(gameState.started&&!gameState.gameOver&&!choicesPauseClocks()&&!saleGameplayPaused()&&!inspectionWasPaused){gameState.activePlayTime+=dt;}
+  if(gameState.started&&!gameState.gameOver&&!choicesPauseClocks()&&!saleGameplayPaused()&&!inspectionWasPaused){gameState.activePlayTime+=dt;gameState.guideRemaining=Math.max(0,gameState.guideRemaining-dt);}
+  if(gameState.started&&!gameState.gameOver&&!choicesPauseClocks()&&!saleGameplayPaused()&&!inspectionWasPaused)updateCollectionClarity();
   const assistantDelta=gameState.timerStarted?Math.min(dt,gameState.timeRemaining):dt;
   updateAssistant(inspectionWasPaused?0:assistantDelta);
   updateMovement(dt);
@@ -3315,12 +3466,12 @@ function animate() {
   if(!gameplayPaused){updateClouds(dt);updateTownLife();}
   if(!gameplayPaused)updateArcadeTown(now);
   if (studioRing) {
-    const relevant = gameState.activeOrder && hasActiveOrderMaterials() && !gameState.hasFinishedDesign;
+    const relevant = gameState.activeOrder && (hasActiveOrderMaterials() || gameState.designRejected) && (!gameState.hasFinishedDesign || gameState.designRejected);
     studioRing.material.opacity = relevant ? .3 + Math.sin(elapsed * 3) * .09 : .16;
   }
   if(shopRing){const ready=upgradeState().affordable||gameState.shopObjective;shopRing.material.color.setHex(ready?C.gold:C.mint);shopRing.material.opacity=ready?.32+Math.sin(elapsed*4)*.1:.12;}
   if (objectiveMarker && objectiveMarker.position.y > 0) {
-    const markerBase = gameState.hasFinishedDesign && gameState.activeOrder ? 2.45 : 3.1;
+    const markerBase = gameState.hasFinishedDesign && !gameState.designRejected && gameState.activeOrder ? 2.45 : 3.1;
     objectiveMarker.position.y = markerBase + Math.sin(elapsed * 2.7) * .16;
     objectiveMarker.scale.setScalar(1 + Math.sin(elapsed * 3.2) * .08);
     objectiveMarker.rotation.y += dt;
@@ -3341,7 +3492,7 @@ function resetRunState() {
   for(const particle of particles){disposeGeneratedGroup(particle.mesh);scene.remove(particle.mesh);}particles.length=0;
   for(const effect of saleEffects){disposeGeneratedGroup(effect.mesh);scene.remove(effect.mesh);}saleEffects.length=0;
   const runSeed=createRunSeed();
-  Object.assign(gameState,{practice:false,practiceOffer:null,practiceFinishing:false,started:false,coins:0,inventory:createEmptyInventory(),stockroom:createEmptyInventory(),showcase:[],showcaseSequence:0,shopTab:'orders',bagLevel:1,bagCapacity:BAG_CAPACITY[1],shopLevel:1,hasFinishedDesign:false,selectedGarmentType:null,selectedColour:null,selectedMotif:null,selectedTrim:null,selectedCut:'CLASSIC',selectedAccent:'MINT',workerOwned:false,rareNextSale:false,speedBoostUntil:0,runwayRushUntil:0,activePlayTime:0,shopObjective:false,moved:false,modalOpen:null,runSeed,rngState:runSeed,orderOffers:[],activeOrder:null,previousCustomerId:null,nextOffersAt:0,destinationPool:[],previousDestinationId:null,finishedDesign:null,timeRemaining:STARTING_TIME,timerStarted:false,score:0,streak:0,bestCombo:0,gameOver:false,stats:{sales:0,perfectStitches:0,legendaryDesigns:0}});
+  Object.assign(gameState,{practice:false,practiceOffer:null,practiceFinishing:false,started:false,coins:0,inventory:createEmptyInventory(),stockroom:createEmptyInventory(),showcase:[],showcaseSequence:0,shopTab:'orders',bagLevel:1,bagCapacity:6,shopLevel:1,hasFinishedDesign:false,designRejected:false,selectedGarmentType:'DRESS',selectedColour:'LAVENDER',selectedMotif:'STAR',selectedTrim:'BOW',selectedCut:'CLASSIC',selectedAccent:'MINT',workerOwned:false,rareNextSale:false,speedBoostUntil:0,runwayRushUntil:0,activePlayTime:0,guideRemaining:0,shopObjective:false,moved:false,modalOpen:null,runSeed,rngState:runSeed,orderOffers:[],activeOrder:null,previousCustomerId:null,nextOffersAt:0,destinationPool:[],previousDestinationId:null,finishedDesign:null,timeRemaining:STARTING_TIME,timerStarted:false,score:0,streak:0,bestCombo:0,gameOver:false,stats:{sales:0,perfectMatches:0,legendaryDesigns:0,customersAnnoyed:0}});
   guidance={stage:null,progress:null,at:gameNow(),reminded:new Set()};setPrompt(null);
   designRevealToken++; designRevealLocked=false; pendingDesign=null; craftChallenge=null;document.querySelector('#craft-challenge').classList.add('hidden');document.querySelector('#stop-craft').classList.add('hidden'); salePauseUntil=0; saleCelebrationCustomer=null; hudCountup=null; cameraCelebration=null;
   assignPickupSlots();
@@ -3352,8 +3503,8 @@ function resetRunState() {
   document.querySelector('#popup-layer').replaceChildren();document.querySelector('#toast').classList.remove('show');
   document.querySelector('#assistant-popup').classList.remove('show');
   if(worker){workerAnimation?.mixer.stopAllAction();disposeOwnedCharacter(worker);worker.parent?.remove(worker);worker=null;} workerAnimation=null;
-  customers.forEach(customer=>{clearGameTimeout(customer.speechTimer);if(customer.speechLabel)customer.wrapper.remove(customer.speechLabel);customer.speechLabel=null;customer.route=customerPatrolRoute(CUSTOMER_DEFINITIONS.find(item=>item.id===customer.id).route);customer.deliveryPath=[];customer.deliveryIndex=0;customer.atDestination=false;customer.wrapper.position.set(customer.route[0][0],0,customer.route[0][1]);customer.wrapper.rotation.set(0,0,0);customer.routeIndex=1;customer.pausedUntil=0;customer.reactionUntil=0;customer.resumeAt=0;customer.sellingPaused=false;customer.inspectUntil=0;customer.animation.play('idle');refreshCustomerBubble(customer);});
-  pickups.forEach(pickup=>{pickup.active=true;pickup.respawnAt=0;pickup.wasInside=false;pickup.group.visible=true;pickup.group.position.copy(pickup.anchor);});
+  customers.forEach(customer=>{clearGameTimeout(customer.speechTimer);if(customer.speechLabel)customer.wrapper.remove(customer.speechLabel);customer.speechLabel=null;customer.route=customerPatrolRoute(CUSTOMER_DEFINITIONS.find(item=>item.id===customer.id).route);customer.deliveryPath=[];customer.deliveryIndex=0;customer.atDestination=false;customer.wrapper.position.set(customer.route[0][0],0,customer.route[0][1]);customer.wrapper.rotation.set(0,0,0);customer.routeIndex=1;customer.pausedUntil=0;customer.reactionUntil=0;customer.resumeAt=0;customer.sellingPaused=false;customer.inspectUntil=0;customer.annoyance=0;customer.annoyanceVisibleUntil=0;customer.fumingUntil=0;customer.chaseUntil=0;customer.rejectionCount=0;customer.goAwayShown=false;customer.countedAnnoyed=false;customer.animation.play('idle');refreshCustomerBubble(customer);});
+  pickups.forEach(pickup=>{pickup.active=true;pickup.respawnAt=0;pickup.group.visible=true;pickup.group.position.copy(pickup.anchor);});
   refreshWorldShowcase();
   document.querySelectorAll('.modal').forEach(modal=>modal.classList.remove('open')); document.querySelector('#game-over-screen').classList.remove('active'); resetStudioReveal();
 }
@@ -3414,12 +3565,9 @@ function bindUI() {
     if(event.pointerType==='mouse'&&event.button!==0)return;
     event.preventDefault();stopCraftChallenge();
   });
-  document.querySelector('#context-action').addEventListener('click',()=>handleInteraction(activeInteraction));
-  document.querySelector('#open-full-bag').addEventListener('click',toggleBag);
-  document.querySelector('#more-looks').addEventListener('click',()=>setDesignerCategory(['cut','accent'].includes(gameState.activeOrder?.designerCategory)?'garment':'cut'));
   const tabs=document.querySelector('.design-tabs');
   tabs.addEventListener('click',event=>{const button=event.target.closest('[data-design-tab]');if(button&&!button.disabled)setDesignerCategory(button.dataset.designTab);});
-  tabs.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)||designRevealLocked)return;event.preventDefault();const buttons=[...tabs.querySelectorAll('[data-design-tab]')].filter(button=>!button.hidden),index=buttons.indexOf(document.activeElement),next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(index+(event.key==='ArrowRight'?1:buttons.length-1))%buttons.length;setDesignerCategory(buttons[next].dataset.designTab);buttons[next].focus();});
+  tabs.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)||designRevealLocked)return;event.preventDefault();const buttons=[...tabs.querySelectorAll('button')],index=buttons.indexOf(document.activeElement),next=event.key==='Home'?0:event.key==='End'?5:(index+(event.key==='ArrowRight'?1:5))%6;setDesignerCategory(buttons[next].dataset.designTab);buttons[next].focus();});
   document.querySelector('#game-canvas').addEventListener('contextmenu',event=>event.preventDefault());
   document.querySelector('#touch-controls').addEventListener('contextmenu',event=>event.preventDefault());
   const unlockAudio = () => {
@@ -3437,7 +3585,7 @@ function bindUI() {
   document.querySelector('#close-shop').addEventListener('click', () => closeModal('shop'));
   document.querySelector('#shop-tabs').addEventListener('click',event=>{const button=event.target.closest('[data-shop-tab]');if(button){gameState.shopTab=button.dataset.shopTab;renderShop();}});
   document.querySelector('#orders-button').addEventListener('click',()=>{if(gameState.modalOpen==='details')closeModal('details');openOrderBoard();});
-  document.querySelector('#next-job').addEventListener('click',()=>continueSale());document.querySelector('#visit-shop').addEventListener('click',()=>continueSale(true));
+  document.querySelector('#guide-button').addEventListener('click',()=>{if(gameState.modalOpen==='details')closeModal('details');activateGuide();});document.querySelector('#next-job').addEventListener('click',()=>continueSale());document.querySelector('#visit-shop').addEventListener('click',()=>continueSale(true));
   document.querySelector('#close-orders').addEventListener('click',()=>closeModal('orders'));
   document.querySelector('#order-board-items').addEventListener('click',event=>{const button=event.target.closest('[data-accept-order]');if(button)acceptOrder(offerForCustomer(button.dataset.acceptOrder));});
   document.querySelector('#stop-craft').addEventListener('click',stopCraftChallenge);

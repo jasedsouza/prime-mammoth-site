@@ -2,7 +2,7 @@
 
 ## Make Your Design
 
-Created by Prime Mammoth · Version 1.0.0
+Created by Prime Mammoth · Version 1.1.0
 
 ## Character art
 
