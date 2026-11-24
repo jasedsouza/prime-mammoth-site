@@ -1,103 +1,13 @@
 <!doctype html>
-<html lang="en" data-edition="demo" data-shell="loading">
+<html lang="en-AU">
   <head>
-    <meta name="robots" content="noindex" />
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#30485d" />
-    <link
-      rel="preload"
-      href="/games/sandwich-panic/fonts/dm-sans.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      href="/games/sandwich-panic/fonts/fraunces.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <title>Sandwich Panic! Playtest Beta — Prime Mammoth</title>
-    <style>
-      [data-edition="demo"] {
-        background: #f7f0e3;
-        color: #30485d;
-      }
-      [data-edition="demo"] body {
-        margin: 0;
-      }
-      [data-edition="demo"] #loading {
-        position: fixed;
-        inset: 0;
-        z-index: 100;
-        display: grid;
-        place-content: center;
-        justify-items: center;
-        background: radial-gradient(ellipse at center, #fffbef, #eadac2);
-        font:
-          600 1rem system-ui,
-          sans-serif;
-        text-align: center;
-      }
-      [data-edition="demo"] #loading .loading-logo {
-        transform: rotate(-4deg);
-        font:
-          900 clamp(1.4rem, 3vw, 2.4rem) / 0.9 Bricolage,
-          system-ui,
-          sans-serif;
-        letter-spacing: 0.12em;
-      }
-      [data-edition="demo"] #loading .loading-logo b {
-        color: #d3412d;
-        font-size: clamp(4rem, 9vw, 7rem);
-        letter-spacing: -0.065em;
-      }
-      [data-edition="demo"] #loading p {
-        margin: 2rem 1rem 0.9rem;
-      }
-      [data-edition="demo"] #loading-retry {
-        padding: 0.65rem 1.4rem;
-        border: 2px solid #30485d;
-        border-radius: 5px;
-        color: #30485d;
-        background: #fff7e7;
-        font: inherit;
-      }
-      #loading[hidden],
-      #loading-retry[hidden] {
-        display: none;
-      }
-    </style>
-    <script type="module" crossorigin src="/games/sandwich-panic/assets/index-BX6mTSed.js"></script>
-    <link rel="stylesheet" crossorigin href="/games/sandwich-panic/assets/index-BRDXk36c.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <meta http-equiv="refresh" content="0; url=https://primemammoth.itch.io/sandwich-panic">
+    <title>Sandwich Panic</title>
   </head>
   <body>
-    <div id="app"></div>
-    <div id="loading">
-      <div class="loading-logo">SANDWICH<br /><b>PANIC!</b></div>
-      <p id="loading-status" role="status">Warming up the machinery…</p>
-      <button id="loading-retry" type="button" hidden>Retry</button>
-    </div>
-    <script>
-      if (document.documentElement.dataset.edition === "demo") {
-        const loader = document.querySelector("#loading");
-        const retry = document.querySelector("#loading-retry");
-        const fail = () => {
-          if (!loader.isConnected || loader.hasAttribute("data-failed")) return;
-          loader.setAttribute("data-failed", "");
-          document.querySelector("#loading-status").textContent =
-            "The kitchen couldn’t start. Try loading it again.";
-          retry.hidden = false;
-          retry.focus();
-        };
-        const timeout = setTimeout(fail, 60000);
-        loader.addEventListener("kitchen-failed", fail);
-        loader.addEventListener("kitchen-ready", () => clearTimeout(timeout));
-        window.addEventListener("error", fail, { once: true });
-        retry.onclick = () => location.reload();
-      }
-    </script>
+    <a href="https://primemammoth.itch.io/sandwich-panic">Play free on itch.io</a>
   </body>
 </html>
